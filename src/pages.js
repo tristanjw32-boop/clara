@@ -42,7 +42,7 @@ const BASE_CSS = `
 
   .nav-logo {
     font-family: var(--font-serif);
-    font-size: 1.4rem;
+    font-size: 2.1rem;
     color: var(--text);
     text-decoration: none;
     letter-spacing: -0.01em;
