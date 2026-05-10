@@ -189,16 +189,16 @@ export function landingPage() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Clara — The AI Financial Advisor for Small Business</title>
-  <meta name="description" content="Most business owners find out they have a cash problem 90 days after it started. Clara finds it first — every morning, from your accounting software, in plain English.">
+  <title>Clara — Risk-sensing intelligence for growing businesses</title>
+  <meta name="description" content="Most businesses find out about a cash problem 90 days after it started. Clara reads your books every night and briefs you every morning — before the problem becomes a crisis.">
   <link rel="canonical" href="https://clara.aerosensei.com/">
 
   <!-- Open Graph -->
   <meta property="og:type"        content="website">
   <meta property="og:url"         content="https://clara.aerosensei.com/">
   <meta property="og:site_name"   content="Clara">
-  <meta property="og:title"       content="The CFO you couldn't afford — Clara">
-  <meta property="og:description" content="Most business owners find out they have a cash problem 90 days after it started. Clara finds it first. Connect your accounting software and ask anything about your finances.">
+  <meta property="og:title"       content="On watch while you build — Clara">
+  <meta property="og:description" content="Most businesses find out about a cash problem 90 days after it started. Clara reads your books every night and briefs you every morning — before the problem becomes a crisis.">
   <meta property="og:image"       content="https://clara.aerosensei.com/hero.jpg">
   <meta property="og:image:width"  content="1280">
   <meta property="og:image:height" content="896">
@@ -206,8 +206,8 @@ export function landingPage() {
 
   <!-- Twitter Card -->
   <meta name="twitter:card"        content="summary_large_image">
-  <meta name="twitter:title"       content="The CFO you couldn't afford — Clara">
-  <meta name="twitter:description" content="Most business owners find out they have a cash problem 90 days after it started. Clara finds it first.">
+  <meta name="twitter:title"       content="On watch while you build — Clara">
+  <meta name="twitter:description" content="Most businesses find out about a cash problem 90 days after it started. Clara reads your books every night and briefs you every morning.">
   <meta name="twitter:image"       content="https://clara.aerosensei.com/hero.jpg">
 
   <!-- Favicon -->
@@ -224,7 +224,7 @@ export function landingPage() {
         "name": "Clara",
         "url": "https://clara.aerosensei.com",
         "logo": "https://clara.aerosensei.com/favicon.svg",
-        "description": "AI-powered financial intelligence for small and medium businesses.",
+        "description": "Risk-sensing financial intelligence for small and medium businesses.",
         "parentOrganization": {
           "@type": "Organization",
           "name": "Well Drilled Inc",
@@ -238,7 +238,7 @@ export function landingPage() {
         "applicationCategory": "FinanceApplication",
         "operatingSystem": "Web",
         "url": "https://clara.aerosensei.com",
-        "description": "Clara reads your accounting software and delivers daily cash, margin, and AR insights to your AI assistant via the MCP protocol — before problems become crises.",
+        "description": "Clara reads your accounting software every night and delivers a plain-English briefing every morning — cash risks, margin drags, overdue collections — before any of them become a crisis.",
         "offers": {
           "@type": "Offer",
           "price": "0",
@@ -261,17 +261,22 @@ export function landingPage() {
           {
             "@type": "Question",
             "name": "What is Clara?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Clara is an AI financial advisor for small businesses. It connects to your accounting software — QuickBooks, Xero, Sage, or Pastel — and delivers daily cash, margin, and accounts receivable insights through your AI assistant." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Clara is risk-sensing financial intelligence for small businesses. It reads your accounting software every night and delivers a plain-English briefing every morning — cash risks, margin drags, overdue collections — before any of them become a crisis." }
+          },
+          {
+            "@type": "Question",
+            "name": "How is Clara different from QuickBooks or Xero?",
+            "acceptedAnswer": { "@type": "Answer", "text": "QuickBooks and Xero record what happened. Clara watches what is happening right now and signals what is coming next. They answer 'what were my numbers last month?' Clara answers 'what is threatening my business today, and what should I do about it?'" }
           },
           {
             "@type": "Question",
             "name": "Which AI assistants does Clara work with?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Clara works with any MCP-compatible AI assistant including Hermes, OpenClaw, and Claude Desktop. It uses the Model Context Protocol (MCP) to deliver financial intelligence as a skill." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Clara works with any MCP-compatible AI assistant including Hermes, OpenClaw, and Claude Desktop." }
           },
           {
             "@type": "Question",
             "name": "Is my financial data safe?",
-            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Clara requests read-only access to your accounting software. It never writes to your books and you can revoke access at any time from your software settings." }
+            "acceptedAnswer": { "@type": "Answer", "text": "Yes. Clara requests read-only access to your accounting software. It never writes to your books and you can revoke access at any time." }
           }
         ]
       }
@@ -602,6 +607,100 @@ export function landingPage() {
     .dev-note a, .dev-note code { color: var(--accent); }
     .dev-note code { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 0.8em; }
 
+    /* ── vs section ── */
+    .vs-section {
+      padding: clamp(3rem, 6vw, 5rem) clamp(1.5rem, 6vw, 5rem);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .vs-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      max-width: 1100px;
+      margin-top: 2.5rem;
+    }
+
+    @media (max-width: 760px) {
+      .vs-grid { grid-template-columns: 1fr; }
+      .vs-card { padding-right: 0; padding-bottom: 2rem; }
+    }
+
+    .vs-card {
+      padding: 2rem 3rem 2rem 0;
+      border-top: 3px solid var(--border);
+    }
+
+    .vs-card.clara-card { border-top-color: var(--accent); }
+
+    .vs-card-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+    }
+
+    .vs-card.clara-card .vs-card-label { color: var(--accent); }
+
+    .vs-card-role {
+      font-family: var(--font-serif);
+      font-size: 1.4rem;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 1.25rem;
+      line-height: 1.2;
+    }
+
+    .vs-bullets {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.625rem;
+    }
+
+    .vs-bullets li {
+      font-size: 0.9rem;
+      color: var(--text-muted);
+      line-height: 1.45;
+      padding-left: 1.1rem;
+      position: relative;
+    }
+
+    .vs-bullets li::before {
+      content: '–';
+      position: absolute;
+      left: 0;
+      color: var(--border);
+    }
+
+    .vs-card.clara-card .vs-bullets li { color: var(--text); }
+    .vs-card.clara-card .vs-bullets li::before { content: '→'; color: var(--accent); }
+
+    /* ── Ambition strip ── */
+    .ambition-strip {
+      padding: clamp(2.5rem, 5vw, 4rem) clamp(1.5rem, 6vw, 5rem);
+      background: var(--bg-alt);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .ambition-strip p {
+      font-family: var(--font-serif);
+      font-size: clamp(1.4rem, 2.75vw, 2.1rem);
+      letter-spacing: -0.02em;
+      line-height: 1.3;
+      max-width: 32ch;
+      color: var(--text);
+    }
+
+    .ambition-strip em {
+      font-style: italic;
+      color: var(--text-muted);
+    }
+
     @media (max-width: 640px) {
       .hero h1 { font-size: 2.75rem; }
       .cap-item { padding-right: 0; }
@@ -615,20 +714,20 @@ export function landingPage() {
   <section>
     <div class="hero-wrap">
       <div class="hero">
-        <p class="eyebrow">Financial intelligence for growing businesses</p>
-        <h1>The CFO you couldn't afford.</h1>
-        <p class="hero-lead">Most business owners find out they have a cash problem 90 days after it started. Clara finds it first &mdash; every morning, from your accounting software, in plain English.</p>
+        <p class="eyebrow">Risk-sensing intelligence for growing businesses</p>
+        <h1>On watch while you build.</h1>
+        <p class="hero-lead">Most businesses find out something's wrong when it's already a crisis. Clara reads your books every night and delivers a plain-English briefing every morning &mdash; cash risks, margin drags, overdue collections &mdash; before they have a chance to hurt you.</p>
         <div style="display:flex;gap:1rem;flex-wrap:wrap">
           <a href="/connect" class="btn">Connect your books &nbsp;→</a>
           <a href="/demo" class="btn btn-ghost">Try live demo</a>
         </div>
-        <p class="hero-qualifier">Works with QuickBooks, Xero, Sage &amp; more &nbsp;·&nbsp; Read-only access &nbsp;·&nbsp; Free to try</p>
+        <p class="hero-qualifier">Works with QuickBooks, Xero, Sage &amp; Pastel &nbsp;·&nbsp; Read-only access &nbsp;·&nbsp; Free to try</p>
       </div>
       <div class="hero-img">
         <img src="/hero.jpg" alt="Business owner reviewing finances" loading="eager">
         <div class="hero-img-caption">
-          <p class="caption-label">Clara found</p>
-          <p class="caption-text">"Your cash drops to $34K in 31 days if Meridian doesn't pay."</p>
+          <p class="caption-label">Clara flagged</p>
+          <p class="caption-text">"Cash drops below payroll threshold in 31 days if Meridian doesn't pay."</p>
         </div>
       </div>
     </div>
@@ -662,48 +761,93 @@ export function landingPage() {
     </div>
   </div>
 
+  <!-- Not what you already have -->
+  <section class="vs-section">
+    <p class="eyebrow">Not what you already have</p>
+    <div class="vs-grid">
+      <div class="vs-card">
+        <p class="vs-card-label">QuickBooks &nbsp;/&nbsp; Xero &nbsp;/&nbsp; Sage &nbsp;/&nbsp; Pastel</p>
+        <p class="vs-card-role">Transaction recorder.</p>
+        <ul class="vs-bullets">
+          <li>Records what happened</li>
+          <li>Answers when you log in and ask</li>
+          <li>Shows you the numbers</li>
+          <li>Stops at the report</li>
+          <li>Optimised for your accountant, not you</li>
+        </ul>
+      </div>
+      <div class="vs-card">
+        <p class="vs-card-label">Your accountant</p>
+        <p class="vs-card-role">Compliance professional.</p>
+        <ul class="vs-bullets">
+          <li>Reviews the past</li>
+          <li>Available by appointment</li>
+          <li>Files the compliance</li>
+          <li>Charges for the extra hour</li>
+          <li>Not trained to say "your margin is structurally broken"</li>
+        </ul>
+      </div>
+      <div class="vs-card clara-card">
+        <p class="vs-card-label">Clara</p>
+        <p class="vs-card-role">Risk-sensing intelligence.</p>
+        <ul class="vs-bullets">
+          <li>Watches right now, signals what's coming</li>
+          <li>Shows up every morning without being asked</li>
+          <li>Names the problem and the fix</li>
+          <li>Builds the plan and tracks the outcome</li>
+          <li>Stays until the business is winning</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <!-- Capabilities -->
   <section>
     <div class="capabilities">
-      <p class="eyebrow">What Clara tracks</p>
+      <p class="eyebrow">What Clara watches</p>
       <div class="cap-grid">
         <div class="cap-item">
           <p class="cap-number">01</p>
-          <h3 class="cap-title">Cash Forecast</h3>
-          <p class="cap-desc">30, 60, and 90-day projections with upcoming payables and AR collections. Know what's coming before it arrives.</p>
+          <h3 class="cap-title">Cash Radar</h3>
+          <p class="cap-desc">30, 60, and 90-day projections built from your live AR and payables. Know what's coming before it arrives &mdash; not 90 days after.</p>
         </div>
         <div class="cap-item">
           <p class="cap-number">02</p>
-          <h3 class="cap-title">Margin Analysis</h3>
-          <p class="cap-desc">Which clients are actually making you money? Gross and net margins by customer, compared to your industry benchmark.</p>
+          <h3 class="cap-title">Margin Intelligence</h3>
+          <p class="cap-desc">Which clients actually make you money? Gross and net margin by customer, named and ranked, compared to your industry benchmark.</p>
         </div>
         <div class="cap-item">
           <p class="cap-number">03</p>
-          <h3 class="cap-title">AR Alerts</h3>
-          <p class="cap-desc">Overdue invoices ranked by urgency with suggested follow-up language. Stop guessing who owes you what.</p>
+          <h3 class="cap-title">AR Risk</h3>
+          <p class="cap-desc">Overdue invoices ranked by urgency with the follow-up language already written. Stop chasing reactively &mdash; start preventing the gaps.</p>
         </div>
         <div class="cap-item">
           <p class="cap-number">04</p>
           <h3 class="cap-title">Value Gaps</h3>
-          <p class="cap-desc">The top three capability gaps in your business, with an estimated annual dollar value for each. Where to focus first.</p>
+          <p class="cap-desc">The top capability gaps in your business, quantified in dollars. Pricing too low by $22K a year. Warranty labour unrecovered at $6K a month. Exact numbers, not vague suggestions.</p>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- Ambition strip -->
+  <div class="ambition-strip">
+    <p>And that's just the start. <em>A good accountant tells you what happened. A great CFO tells you what to do. Clara tells you what to do &mdash; then stays until it's done.</em></p>
+  </div>
+
   <!-- How it works -->
   <section class="how">
     <div class="how-inner">
       <div>
-        <h2>Your CFO, inside your AI assistant.</h2>
-        <p>Connect your accounting software once. Then ask your AI assistant anything about your business — Clara answers with your actual numbers.</p>
+        <h2>Proactive intelligence. Every morning.</h2>
+        <p>Connect your accounting software once. Clara reads your books overnight and delivers a briefing before you've opened your inbox. When something needs your attention, she says so &mdash; specific, quantified, actionable. When everything is fine, you hear nothing. Both signals matter.</p>
         <p>Works with Hermes, OpenClaw, and any Claude-compatible AI agent via the MCP protocol.</p>
       </div>
       <ol class="how-steps">
-        <li>Connect your accounting software &mdash; QuickBooks, Xero, Sage, or Pastel. Read-only, revocable any time.</li>
+        <li>Connect your accounting software &mdash; QuickBooks, Xero, Sage, or Pastel. Read-only access, revocable any time.</li>
         <li>Get your Clara API key and drop it into your AI assistant's configuration.</li>
-        <li>Ask anything: "What's my cash runway?" "Which client is least profitable?" "Who owes me money right now?"</li>
-        <li>Clara reads your live data and responds with specific, quantified answers &mdash; not generic advice.</li>
+        <li>Clara reads your books overnight. Your briefing arrives every morning &mdash; no login required.</li>
+        <li>Ask anything deeper: "What's my real cash runway?" "Which client should I fire?" "Where am I leaving money?"</li>
       </ol>
     </div>
   </section>
@@ -774,8 +918,8 @@ export function landingPage() {
   <!-- Bottom CTA -->
   <section>
     <div class="bottom-cta">
-      <h2>See what your books are hiding.</h2>
-      <p>Most SMB owners find out they have a cash problem 90 days after it started. Clara finds it first.</p>
+      <h2>Stop finding out too late.</h2>
+      <p>Every week without clear visibility into your cash, your margins, and your AR risk is a week where small problems compound. Clara starts watching today.</p>
       <div style="display:flex;gap:1rem;flex-wrap:wrap">
         <a href="/connect" class="btn">Connect your books &nbsp;→</a>
         <a href="/demo" class="btn btn-ghost">Try live demo</a>
@@ -979,8 +1123,12 @@ export function connectedPage({ apiKey, businessName }) {
   <style>
     ${BASE_CSS}
 
+    html, body { overflow-x: hidden; }
+
     .connected-wrap {
       max-width: 1100px;
+      width: 100%;
+      box-sizing: border-box;
       padding: clamp(3rem, 6vw, 5rem) clamp(1.5rem, 6vw, 5rem);
     }
 
@@ -1002,12 +1150,13 @@ export function connectedPage({ apiKey, businessName }) {
     .step-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 2.5rem;
+      gap: 2rem;
       margin-bottom: 3rem;
+      max-width: 532px;
     }
 
     @media (max-width: 720px) {
-      .step-grid { grid-template-columns: 1fr; }
+      .step-grid { grid-template-columns: 1fr; max-width: 100%; }
     }
 
     .step-card {
@@ -1083,6 +1232,8 @@ export function connectedPage({ apiKey, businessName }) {
     .code-wrap {
       position: relative;
       margin-top: 0.5rem;
+      max-width: 100%;
+      overflow: hidden;
     }
 
     .code-block {
@@ -1094,6 +1245,8 @@ export function connectedPage({ apiKey, businessName }) {
       padding: 1.25rem 1.5rem;
       overflow-x: auto;
       white-space: pre;
+      max-width: 100%;
+      box-sizing: border-box;
     }
 
     .code-copy-btn {
