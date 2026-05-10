@@ -1,0 +1,122 @@
+{
+  "business": {
+    "id": "peak-fitness",
+    "name": "Peak Performance Fitness",
+    "industry": "fitness_wellness",
+    "owner": "Marcus",
+    "headcount": 14,
+    "currency": "USD",
+    "fiscal_year_start_month": 1
+  },
+  "snapshot_date": "2026-05-10",
+  "cash": {
+    "current_balance": 41800,
+    "30d_ago": 38200,
+    "60d_ago": 36900,
+    "90d_ago": 34100,
+    "accounts": [
+      { "name": "Business Checking", "balance": 41800 }
+    ],
+    "upcoming_payables": [
+      { "description": "Payroll", "amount": 19400, "due_in_days": 5 },
+      { "description": "Rent", "amount": 8200, "due_in_days": 21 },
+      { "description": "Equipment maintenance contract", "amount": 1800, "due_in_days": 30 }
+    ]
+  },
+  "revenue": {
+    "mtd": 52400,
+    "mtd_prior_year": 51100,
+    "last_30d": 51800,
+    "last_60d": 50200,
+    "last_90d": 49600,
+    "ytd": 202000,
+    "ytd_prior_year": 196000
+  },
+  "cogs": {
+    "last_30d": 32100,
+    "last_90d": 94200
+  },
+  "expenses": {
+    "last_30d": 14800,
+    "last_90d": 44400,
+    "categories": [
+      { "name": "Payroll", "amount_30d": 8200 },
+      { "name": "Rent & utilities", "amount_30d": 4200 },
+      { "name": "Equipment", "amount_30d": 1400 },
+      { "name": "Marketing", "amount_30d": 600 },
+      { "name": "Other", "amount_30d": 400 }
+    ]
+  },
+  "margin": {
+    "gross_pct_30d": 38.0,
+    "gross_pct_90d": 37.8,
+    "gross_pct_prior_year": 38.1,
+    "net_pct_30d": 9.5,
+    "net_pct_90d": 8.9
+  },
+  "customers": [
+    {
+      "id": "seg-001",
+      "name": "Personal training (1:1)",
+      "revenue_90d": 28400,
+      "cogs_90d": 14800,
+      "margin_pct": 47.9,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 0,
+      "notes": "Best margin. 8 regular clients. Constrained by trainer availability, not demand."
+    },
+    {
+      "id": "seg-002",
+      "name": "Group classes (memberships)",
+      "revenue_90d": 16200,
+      "cogs_90d": 12400,
+      "margin_pct": 23.5,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 0,
+      "notes": "Classes priced at $18/session. Market rate is $26-28. 340 active members. This is a material underpricing problem."
+    },
+    {
+      "id": "seg-003",
+      "name": "Corporate wellness contracts",
+      "revenue_90d": 5000,
+      "cogs_90d": 3100,
+      "margin_pct": 38.0,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 14,
+      "notes": "2 small corporate contracts. Underexploited channel."
+    }
+  ],
+  "ar": {
+    "total_outstanding": 0,
+    "current": 0,
+    "days_31_60": 0,
+    "days_61_90": 0,
+    "days_over_90": 0,
+    "invoices": []
+  },
+  "capability_scores": {
+    "pricing_strategy": 1,
+    "financial_visibility": 2,
+    "operations_efficiency": 3,
+    "customer_acquisition": 3,
+    "customer_retention": 4,
+    "talent_management": 3,
+    "technology_automation": 2,
+    "sales_process": 2,
+    "cash_flow_management": 3,
+    "strategic_planning": 2
+  },
+  "industry_benchmarks": {
+    "gross_margin_pct": 55.0,
+    "net_margin_pct": 18.0,
+    "ar_days": 5,
+    "cash_buffer_days": 45
+  },
+  "market_data": {
+    "group_class_avg_market_price": 27,
+    "group_class_current_price": 18,
+    "group_class_sessions_per_month": 210,
+    "personal_training_avg_market_price": 95,
+    "personal_training_current_price": 88
+  }
+}

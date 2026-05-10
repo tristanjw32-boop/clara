@@ -1,0 +1,150 @@
+{
+  "business": {
+    "id": "metro-bakery",
+    "name": "Metro Artisan Bakery",
+    "industry": "food_retail",
+    "owner": "James",
+    "headcount": 19,
+    "currency": "USD",
+    "fiscal_year_start_month": 1
+  },
+  "snapshot_date": "2026-05-10",
+  "cash": {
+    "current_balance": 18400,
+    "30d_ago": 29200,
+    "60d_ago": 41800,
+    "90d_ago": 52100,
+    "accounts": [
+      { "name": "Business Checking", "balance": 14200 },
+      { "name": "Tax Reserve Account", "balance": 4200 }
+    ],
+    "upcoming_payables": [
+      { "description": "Payroll", "amount": 16800, "due_in_days": 3 },
+      { "description": "Supplier invoice – FlourCo", "amount": 7400, "due_in_days": 8 },
+      { "description": "Equipment lease", "amount": 2200, "due_in_days": 15 },
+      { "description": "Payroll", "amount": 16800, "due_in_days": 17 },
+      { "description": "Rent", "amount": 6400, "due_in_days": 21 }
+    ]
+  },
+  "revenue": {
+    "mtd": 68200,
+    "mtd_prior_year": 71400,
+    "last_30d": 66800,
+    "last_60d": 69200,
+    "last_90d": 71100,
+    "ytd": 284000,
+    "ytd_prior_year": 298000
+  },
+  "cogs": {
+    "last_30d": 41800,
+    "last_90d": 128400
+  },
+  "expenses": {
+    "last_30d": 22100,
+    "last_90d": 66300,
+    "categories": [
+      { "name": "Payroll", "amount_30d": 14200 },
+      { "name": "Rent & utilities", "amount_30d": 5100 },
+      { "name": "Equipment lease", "amount_30d": 2200 },
+      { "name": "Other", "amount_30d": 600 }
+    ]
+  },
+  "margin": {
+    "gross_pct_30d": 37.4,
+    "gross_pct_90d": 39.5,
+    "gross_pct_prior_year": 41.8,
+    "net_pct_30d": 4.3,
+    "net_pct_90d": 5.4
+  },
+  "customers": [
+    {
+      "id": "cust-001",
+      "name": "Wholesale – Hotel accounts (4)",
+      "revenue_90d": 38200,
+      "cogs_90d": 25800,
+      "margin_pct": 32.5,
+      "invoices_outstanding": 22600,
+      "avg_payment_days": 47,
+      "notes": "Wholesale accounts pay Net 30 but routinely slip to Net 45-50. Volume is good but ties up cash."
+    },
+    {
+      "id": "cust-002",
+      "name": "Retail walk-in",
+      "revenue_90d": 24400,
+      "cogs_90d": 13800,
+      "margin_pct": 43.4,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 0,
+      "notes": "Immediate cash. Best margin. Limited by foot traffic."
+    },
+    {
+      "id": "cust-003",
+      "name": "Corporate catering (recurring)",
+      "revenue_90d": 8500,
+      "cogs_90d": 5100,
+      "margin_pct": 40.0,
+      "invoices_outstanding": 8400,
+      "avg_payment_days": 38,
+      "notes": "3 corporate accounts. Reliable but invoiced monthly."
+    }
+  ],
+  "ar": {
+    "total_outstanding": 31000,
+    "current": 0,
+    "days_31_60": 22600,
+    "days_61_90": 8400,
+    "days_over_90": 0,
+    "invoices": [
+      {
+        "id": "INV-4412",
+        "customer": "Grand Meridian Hotel",
+        "amount": 8800,
+        "days_outstanding": 48,
+        "due_date": "2026-03-23",
+        "description": "April wholesale delivery"
+      },
+      {
+        "id": "INV-4413",
+        "customer": "The Riverside Inn",
+        "amount": 7200,
+        "days_outstanding": 44,
+        "due_date": "2026-03-27",
+        "description": "April wholesale delivery"
+      },
+      {
+        "id": "INV-4418",
+        "customer": "Plaza Conference Center",
+        "amount": 6600,
+        "days_outstanding": 39,
+        "due_date": "2026-04-01",
+        "description": "April catering + wholesale"
+      },
+      {
+        "id": "INV-4389",
+        "customer": "Lakeside Suites",
+        "amount": 8400,
+        "days_outstanding": 62,
+        "due_date": "2026-03-09",
+        "description": "March wholesale delivery"
+      }
+    ]
+  },
+  "capability_scores": {
+    "pricing_strategy": 3,
+    "financial_visibility": 1,
+    "operations_efficiency": 3,
+    "customer_acquisition": 2,
+    "customer_retention": 4,
+    "talent_management": 3,
+    "technology_automation": 1,
+    "sales_process": 2,
+    "cash_flow_management": 1,
+    "strategic_planning": 2
+  },
+  "industry_benchmarks": {
+    "gross_margin_pct": 42.0,
+    "net_margin_pct": 9.0,
+    "ar_days": 20,
+    "cash_buffer_days": 30
+  }
+}

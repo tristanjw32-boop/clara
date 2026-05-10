@@ -1,0 +1,136 @@
+{
+  "business": {
+    "id": "summit-hvac",
+    "name": "Summit HVAC Services",
+    "industry": "trades",
+    "owner": "Linda",
+    "headcount": 22,
+    "currency": "USD",
+    "fiscal_year_start_month": 1
+  },
+  "snapshot_date": "2026-05-10",
+  "cash": {
+    "current_balance": 118400,
+    "30d_ago": 124100,
+    "60d_ago": 131800,
+    "90d_ago": 129200,
+    "accounts": [
+      { "name": "Operating Account", "balance": 94400 },
+      { "name": "Equipment Reserve", "balance": 24000 }
+    ],
+    "upcoming_payables": [
+      { "description": "Payroll", "amount": 41200, "due_in_days": 6 },
+      { "description": "Parts supplier – CoolTech", "amount": 12800, "due_in_days": 14 },
+      { "description": "Fleet insurance", "amount": 4100, "due_in_days": 22 },
+      { "description": "Payroll", "amount": 41200, "due_in_days": 20 }
+    ]
+  },
+  "revenue": {
+    "mtd": 198000,
+    "mtd_prior_year": 184000,
+    "last_30d": 194800,
+    "last_60d": 188200,
+    "last_90d": 201400,
+    "ytd": 802000,
+    "ytd_prior_year": 741000
+  },
+  "cogs": {
+    "last_30d": 128400,
+    "last_90d": 381000
+  },
+  "expenses": {
+    "last_30d": 52100,
+    "last_90d": 156300,
+    "categories": [
+      { "name": "Payroll", "amount_30d": 34200 },
+      { "name": "Fleet & fuel", "amount_30d": 8400 },
+      { "name": "Insurance", "amount_30d": 4100 },
+      { "name": "Office & admin", "amount_30d": 2800 },
+      { "name": "Other", "amount_30d": 2600 }
+    ]
+  },
+  "margin": {
+    "gross_pct_30d": 34.1,
+    "gross_pct_90d": 35.8,
+    "gross_pct_prior_year": 36.2,
+    "net_pct_30d": 7.3,
+    "net_pct_90d": 8.0
+  },
+  "customers": [
+    {
+      "id": "cust-001",
+      "name": "Commercial maintenance contracts (18)",
+      "revenue_90d": 112000,
+      "cogs_90d": 67800,
+      "margin_pct": 39.5,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 21,
+      "notes": "Core revenue. Predictable. Contracts renewed annually. Renewal rate 94%."
+    },
+    {
+      "id": "cust-002",
+      "name": "Emergency / reactive callouts",
+      "revenue_90d": 58400,
+      "cogs_90d": 44900,
+      "margin_pct": 23.1,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 8,
+      "notes": "Emergency work billed at standard rates, not premium rates. Industry standard is 1.4-1.6x multiplier for emergency call-outs."
+    },
+    {
+      "id": "cust-003",
+      "name": "Warranty callbacks (contract customers)",
+      "revenue_90d": 0,
+      "cogs_90d": 18200,
+      "margin_pct": -100,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 0,
+      "notes": "ZERO REVENUE. Warranty callbacks are treated as included in maintenance contract price. Industry standard is to charge a call-out fee ($95-150) or define a callback window. This is costing ~$6,100/month in unrecovered labour and parts."
+    },
+    {
+      "id": "cust-004",
+      "name": "Residential install & service",
+      "revenue_90d": 31000,
+      "cogs_90d": 19800,
+      "margin_pct": 36.1,
+      "invoices_outstanding": 4200,
+      "avg_payment_days": 24,
+      "notes": "Solid margin. Growth potential via referral program not yet exploited."
+    }
+  ],
+  "ar": {
+    "total_outstanding": 4200,
+    "current": 4200,
+    "days_31_60": 0,
+    "days_61_90": 0,
+    "days_over_90": 0,
+    "invoices": [
+      {
+        "id": "INV-7821",
+        "customer": "Residential – 4 invoices",
+        "amount": 4200,
+        "days_outstanding": 18,
+        "due_date": "2026-04-22",
+        "description": "April residential installs"
+      }
+    ]
+  },
+  "capability_scores": {
+    "pricing_strategy": 2,
+    "financial_visibility": 3,
+    "operations_efficiency": 4,
+    "customer_acquisition": 3,
+    "customer_retention": 5,
+    "talent_management": 4,
+    "technology_automation": 3,
+    "sales_process": 3,
+    "cash_flow_management": 4,
+    "strategic_planning": 3
+  },
+  "industry_benchmarks": {
+    "gross_margin_pct": 42.0,
+    "net_margin_pct": 12.0,
+    "ar_days": 25,
+    "cash_buffer_days": 45
+  }
+}

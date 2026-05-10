@@ -1,0 +1,161 @@
+{
+  "business": {
+    "id": "acme-plumbing",
+    "name": "Acme Plumbing Co.",
+    "industry": "trades",
+    "owner": "Dave",
+    "headcount": 12,
+    "currency": "USD",
+    "fiscal_year_start_month": 1
+  },
+  "snapshot_date": "2026-05-10",
+  "cash": {
+    "current_balance": 84200,
+    "30d_ago": 97100,
+    "60d_ago": 112400,
+    "90d_ago": 88500,
+    "accounts": [
+      { "name": "Business Checking", "balance": 71200 },
+      { "name": "Business Savings", "balance": 13000 }
+    ],
+    "upcoming_payables": [
+      { "description": "Payroll", "amount": 22400, "due_in_days": 4 },
+      { "description": "Supplier invoice – PipeMax", "amount": 8200, "due_in_days": 11 },
+      { "description": "Insurance premium", "amount": 3100, "due_in_days": 18 }
+    ]
+  },
+  "revenue": {
+    "mtd": 142000,
+    "mtd_prior_year": 118000,
+    "last_30d": 138500,
+    "last_60d": 131200,
+    "last_90d": 124800,
+    "ytd": 612000,
+    "ytd_prior_year": 498000
+  },
+  "cogs": {
+    "last_30d": 89200,
+    "last_90d": 241000
+  },
+  "expenses": {
+    "last_30d": 31400,
+    "last_90d": 94200,
+    "categories": [
+      { "name": "Payroll", "amount_30d": 18200 },
+      { "name": "Materials", "amount_30d": 6400 },
+      { "name": "Vehicles & fuel", "amount_30d": 3100 },
+      { "name": "Insurance", "amount_30d": 1800 },
+      { "name": "Other", "amount_30d": 1900 }
+    ]
+  },
+  "margin": {
+    "gross_pct_30d": 35.6,
+    "gross_pct_90d": 38.2,
+    "gross_pct_prior_year": 41.1,
+    "net_pct_30d": 12.9,
+    "net_pct_90d": 14.4
+  },
+  "customers": [
+    {
+      "id": "cust-001",
+      "name": "Metro Property Management",
+      "revenue_90d": 48200,
+      "cogs_90d": 27300,
+      "margin_pct": 43.4,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 18,
+      "notes": "Reliable anchor client. Pays fast."
+    },
+    {
+      "id": "cust-002",
+      "name": "Riverside Apartments",
+      "revenue_90d": 39100,
+      "cogs_90d": 30400,
+      "margin_pct": 22.3,
+      "invoices_outstanding": 14300,
+      "avg_payment_days": 61,
+      "notes": "High volume but constant call-backs and slow payment. True cost understated."
+    },
+    {
+      "id": "cust-003",
+      "name": "Greenfield Builders",
+      "revenue_90d": 28400,
+      "cogs_90d": 15900,
+      "margin_pct": 44.0,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 22,
+      "notes": "Strong margin. Steady referral pipeline."
+    },
+    {
+      "id": "cust-004",
+      "name": "Sunview Hotels",
+      "revenue_90d": 21600,
+      "cogs_90d": 18200,
+      "margin_pct": 15.7,
+      "invoices_outstanding": 8400,
+      "avg_payment_days": 74,
+      "notes": "Emergency work billed at standard rates. Slow payer. Callbacks never charged."
+    },
+    {
+      "id": "cust-005",
+      "name": "Retail & residential (misc)",
+      "revenue_90d": 14000,
+      "cogs_90d": 7100,
+      "margin_pct": 49.3,
+      "invoices_outstanding": 2100,
+      "avg_payment_days": 12,
+      "notes": "Small jobs, high margin, fast payment."
+    }
+  ],
+  "ar": {
+    "total_outstanding": 24800,
+    "current": 2100,
+    "days_31_60": 0,
+    "days_61_90": 14300,
+    "days_over_90": 8400,
+    "invoices": [
+      {
+        "id": "INV-0891",
+        "customer": "Sunview Hotels",
+        "amount": 8400,
+        "days_outstanding": 94,
+        "due_date": "2026-02-05",
+        "description": "Emergency boiler repair – Feb"
+      },
+      {
+        "id": "INV-0912",
+        "customer": "Riverside Apartments",
+        "amount": 14300,
+        "days_outstanding": 67,
+        "due_date": "2026-03-04",
+        "description": "Routine maintenance – March batch"
+      },
+      {
+        "id": "INV-0941",
+        "customer": "Retail & residential",
+        "amount": 2100,
+        "days_outstanding": 19,
+        "due_date": "2026-04-21",
+        "description": "Residential repair – April"
+      }
+    ]
+  },
+  "capability_scores": {
+    "pricing_strategy": 2,
+    "financial_visibility": 3,
+    "operations_efficiency": 4,
+    "customer_acquisition": 3,
+    "customer_retention": 3,
+    "talent_management": 3,
+    "technology_automation": 2,
+    "sales_process": 2,
+    "cash_flow_management": 3,
+    "strategic_planning": 2
+  },
+  "industry_benchmarks": {
+    "gross_margin_pct": 42.0,
+    "net_margin_pct": 18.0,
+    "ar_days": 28,
+    "cash_buffer_days": 45
+  }
+}

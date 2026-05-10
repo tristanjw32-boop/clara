@@ -1,0 +1,168 @@
+{
+  "business": {
+    "id": "riverside-consulting",
+    "name": "Riverside Strategy Group",
+    "industry": "professional_services",
+    "owner": "Sarah",
+    "headcount": 8,
+    "currency": "USD",
+    "fiscal_year_start_month": 1
+  },
+  "snapshot_date": "2026-05-10",
+  "cash": {
+    "current_balance": 62400,
+    "30d_ago": 58900,
+    "60d_ago": 71200,
+    "90d_ago": 83100,
+    "accounts": [
+      { "name": "Operating Account", "balance": 62400 }
+    ],
+    "upcoming_payables": [
+      { "description": "Payroll", "amount": 38600, "due_in_days": 7 },
+      { "description": "Office rent", "amount": 4800, "due_in_days": 21 },
+      { "description": "Software subscriptions", "amount": 1200, "due_in_days": 14 }
+    ]
+  },
+  "revenue": {
+    "mtd": 89000,
+    "mtd_prior_year": 94000,
+    "last_30d": 86500,
+    "last_60d": 91200,
+    "last_90d": 88800,
+    "ytd": 361000,
+    "ytd_prior_year": 389000
+  },
+  "cogs": {
+    "last_30d": 52100,
+    "last_90d": 161400
+  },
+  "expenses": {
+    "last_30d": 28900,
+    "last_90d": 86700,
+    "categories": [
+      { "name": "Payroll (non-billable hours)", "amount_30d": 18400 },
+      { "name": "Office & rent", "amount_30d": 4800 },
+      { "name": "Software & tools", "amount_30d": 1200 },
+      { "name": "Travel", "amount_30d": 2800 },
+      { "name": "Other", "amount_30d": 1700 }
+    ]
+  },
+  "margin": {
+    "gross_pct_30d": 39.8,
+    "gross_pct_90d": 38.1,
+    "gross_pct_prior_year": 44.2,
+    "net_pct_30d": 6.4,
+    "net_pct_90d": 4.6
+  },
+  "customers": [
+    {
+      "id": "cust-001",
+      "name": "Hartwell Capital",
+      "revenue_90d": 38000,
+      "cogs_90d": 19400,
+      "margin_pct": 48.9,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 14,
+      "notes": "Best client. Clean scope, fast decisions, pays on time."
+    },
+    {
+      "id": "cust-002",
+      "name": "Bravo Manufacturing",
+      "revenue_90d": 24000,
+      "cogs_90d": 21800,
+      "margin_pct": 9.2,
+      "invoices_outstanding": 19200,
+      "avg_payment_days": 88,
+      "notes": "Constant scope creep. 4 revisions on last deliverable. Slow to pay. True cost is higher than COGS shows — junior staff overtime not fully captured."
+    },
+    {
+      "id": "cust-003",
+      "name": "Apex Health Systems",
+      "revenue_90d": 18000,
+      "cogs_90d": 9800,
+      "margin_pct": 45.6,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 21,
+      "notes": "Good relationship. Needs more strategic work — currently underutilising."
+    },
+    {
+      "id": "cust-004",
+      "name": "Dalton Retail Group",
+      "revenue_90d": 6000,
+      "cogs_90d": 7200,
+      "margin_pct": -20.0,
+      "invoices_outstanding": 14800,
+      "avg_payment_days": 112,
+      "notes": "LOSING MONEY. Fixed-fee contract with a scope that was underestimated at sale. 3 invoices outstanding over 90 days."
+    },
+    {
+      "id": "cust-005",
+      "name": "Other / small projects",
+      "revenue_90d": 2800,
+      "cogs_90d": 1400,
+      "margin_pct": 50.0,
+      "invoices_outstanding": 0,
+      "avg_payment_days": 10,
+      "notes": "Ad hoc work. Clean margin."
+    }
+  ],
+  "ar": {
+    "total_outstanding": 34000,
+    "current": 0,
+    "days_31_60": 0,
+    "days_61_90": 19200,
+    "days_over_90": 14800,
+    "invoices": [
+      {
+        "id": "INV-2041",
+        "customer": "Dalton Retail Group",
+        "amount": 6000,
+        "days_outstanding": 118,
+        "due_date": "2026-01-12",
+        "description": "Phase 1 strategy delivery"
+      },
+      {
+        "id": "INV-2067",
+        "customer": "Dalton Retail Group",
+        "amount": 4800,
+        "days_outstanding": 101,
+        "due_date": "2026-01-29",
+        "description": "Phase 2 interim report"
+      },
+      {
+        "id": "INV-2089",
+        "customer": "Dalton Retail Group",
+        "amount": 4000,
+        "days_outstanding": 94,
+        "due_date": "2026-02-05",
+        "description": "Phase 2 final delivery"
+      },
+      {
+        "id": "INV-2104",
+        "customer": "Bravo Manufacturing",
+        "amount": 19200,
+        "days_outstanding": 68,
+        "due_date": "2026-03-03",
+        "description": "Q1 strategy engagement – final"
+      }
+    ]
+  },
+  "capability_scores": {
+    "pricing_strategy": 2,
+    "financial_visibility": 2,
+    "operations_efficiency": 3,
+    "customer_acquisition": 3,
+    "customer_retention": 4,
+    "talent_management": 3,
+    "technology_automation": 3,
+    "sales_process": 3,
+    "cash_flow_management": 2,
+    "strategic_planning": 3
+  },
+  "industry_benchmarks": {
+    "gross_margin_pct": 52.0,
+    "net_margin_pct": 18.0,
+    "ar_days": 30,
+    "cash_buffer_days": 60
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "@welldrilled/clara-mcp",
+  "version": "1.0.0",
+  "description": "Clara — SMB Financial Intelligence MCP Server",
+  "type": "module",
+  "main": "server.js",
+  "bin": {
+    "clara-mcp": "./server.js"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "0.39.0",
+    "@modelcontextprotocol/sdk": "1.11.0",
+    "dotenv": "17.4.2",
+    "express": "5.2.1",
+    "pg": "8.20.0"
+  }
+}
