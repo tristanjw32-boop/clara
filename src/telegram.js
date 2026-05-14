@@ -7,7 +7,7 @@ import { createHmac } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { logChatEvent } from './events.js';
 import { seedWiki, deleteWiki } from './wiki.js';
-import { runCurator, buildWikiContext } from './curator.js';
+import { runCurator, buildWikiContext, runSnapshotCurator, updatePricingPage } from './curator.js';
 import { getSession as dbGetSession, saveSession, deleteSession } from './session-store.js';
 import {
   onboardClara,
@@ -178,12 +178,20 @@ async function runTool(token, chatId, businessId, toolFn, textKey) {
   try {
     const session = sessionCache.get(chatId);
     const ownerName = session?.ownerName;
-    const result = await toolFn({ business_id: businessId, owner_name: ownerName });
+    const wikiContext = await buildWikiContext(chatId);
+    const result = await toolFn({ business_id: businessId, owner_name: ownerName, wiki_context: wikiContext });
     const text = result[textKey] || JSON.stringify(result);
     const formatted = fmt(text);
     await sendWithKeyboard(token, chatId, formatted);
     if (session) logTurn(session, 'clara', text);
     scheduleCurator(chatId);
+    // Fire-and-forget post-call wiki updates
+    if (result.raw) {
+      setTimeout(() => runSnapshotCurator(chatId, textKey, result.raw), 0);
+    }
+    if (textKey === 'analysis' && result.raw?.service_pricing_gaps?.length > 0) {
+      setTimeout(() => updatePricingPage(chatId, result.raw.service_pricing_gaps), 0);
+    }
   } catch (err) {
     logChatEvent({ event: 'run_tool_error', chatId, businessId, error: err.message, stack: err.stack?.slice(0, 400) });
     await send(token, chatId, 'Something went wrong — try again in a moment.');

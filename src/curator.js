@@ -182,14 +182,97 @@ function formatTranscript(transcript) {
     .join('\n');
 }
 
+// ── Snapshot curator (runs after each QBO tool call) ─────────────────────────
+
+export async function runSnapshotCurator(chatId, toolName, rawContext) {
+  if (!chatId || !rawContext) return;
+  const date = new Date().toISOString().slice(0, 10);
+
+  try {
+    const current = (await readPage(chatId, 'financials.md')) || '';
+    const snapshot = {
+      date,
+      tool: toolName,
+      cash_current: rawContext.cash_current,
+      cash_direction: rawContext.cash_direction,
+      revenue_30d: rawContext.revenue_30d,
+      gross_margin: rawContext.gross_margin_pct,
+      net_margin: rawContext.net_margin_pct,
+      ar_total_overdue: rawContext.ar_total_overdue,
+      most_urgent_alert: rawContext.most_urgent_alert,
+      // forecast and margin raw shapes
+      current_cash: rawContext.current_cash,
+      projections: rawContext.projections,
+      overall_gross_margin_30d: rawContext.overall_gross_margin_30d,
+    };
+
+    const response = await getClient().messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: `You maintain the Financial History wiki page for a business owner's advisor. You receive a new live data snapshot and the current page. Your job:
+1. Add a new dated observation entry under "## Snapshot History" — include cash, AR, margin, any alerts. Be specific, one line each.
+2. Update the "## Observed Patterns" section if you see a clear trend across 2+ snapshots (e.g. "Cash has declined in 2 consecutive observations", "AR improving").
+3. Do NOT invent information not in the snapshot.
+4. Return ONLY the updated markdown. No preamble.`,
+      messages: [{
+        role: 'user',
+        content: `Date: ${date}\n\nCurrent financials.md:\n"""\n${current || '# Financial History\n\n## Snapshot History\n_No observations yet_\n\n## Observed Patterns\n_Not enough data yet_\n'}\n"""\n\nNew QBO snapshot:\n${JSON.stringify(snapshot, null, 2)}`,
+      }],
+    });
+
+    const updated = response.content[0].text.trim();
+    if (updated && updated !== current.trim()) {
+      await writePage(chatId, 'financials.md', updated + '\n');
+      logChatEvent({ event: 'snapshot_curator_done', chatId, tool: toolName });
+    }
+  } catch (err) {
+    logChatEvent({ event: 'snapshot_curator_error', chatId, error: err.message });
+  }
+}
+
+// ── Pricing page update (runs after identify_value_gaps) ──────────────────────
+
+export async function updatePricingPage(chatId, serviceGaps) {
+  if (!chatId || !serviceGaps || serviceGaps.length === 0) return;
+  const date = new Date().toISOString().slice(0, 10);
+
+  try {
+    const current = (await readPage(chatId, 'pricing.md')) || '';
+
+    const response = await getClient().messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: `You maintain the Pricing History wiki page for a business owner's advisor. You receive current service rate observations from live QBO data and the existing page. Your job:
+1. Update "## Service Rates (QBO observed)" with today's observed rate for each service — one line per service: "Service: $X/hr (observed DATE, benchmark $Y/hr, GAP%)"
+2. Under "## Rate Changes Tracked", add an entry ONLY if today's rate differs from the most recent prior observation for the same service.
+3. Under "## Benchmark Gaps", summarise which services remain below market and which have reached or exceeded benchmark.
+4. Return ONLY the updated markdown. No preamble.`,
+      messages: [{
+        role: 'user',
+        content: `Date: ${date}\n\nCurrent pricing.md:\n"""\n${current}\n"""\n\nCurrent service rate observations:\n${JSON.stringify(serviceGaps, null, 2)}`,
+      }],
+    });
+
+    const updated = response.content[0].text.trim();
+    if (updated && updated !== current.trim()) {
+      await writePage(chatId, 'pricing.md', updated + '\n');
+      logChatEvent({ event: 'pricing_page_updated', chatId, services: serviceGaps.length });
+    }
+  } catch (err) {
+    logChatEvent({ event: 'pricing_page_error', chatId, error: err.message });
+  }
+}
+
 // ── Context builder (used by telegram.js before askClara) ─────────────────────
 
 export async function buildWikiContext(chatId) {
-  const [profile, psychology, ambitions, actionTracker] = await Promise.all([
+  const [profile, psychology, ambitions, actionTracker, financials, pricing] = await Promise.all([
     readPage(chatId, 'profile.md'),
     readPage(chatId, 'psychology.md'),
     readPage(chatId, 'ambitions.md'),
     readPage(chatId, 'action_tracker.md'),
+    readPage(chatId, 'financials.md'),
+    readPage(chatId, 'pricing.md'),
   ]);
 
   const sections = [
@@ -197,8 +280,10 @@ export async function buildWikiContext(chatId) {
     ['psychology.md', psychology],
     ['ambitions.md', ambitions],
     ['action_tracker.md', actionTracker],
+    ['financials.md', financials],
+    ['pricing.md', pricing],
   ]
-    .filter(([, v]) => v && !v.includes('_Not yet known_'))
+    .filter(([, v]) => v && !v.includes('_Not yet known_') && !v.includes('_No observations yet_') && !v.includes('_None yet_'))
     .map(([k, v]) => `### ${k}\n${v.trim()}`);
 
   if (sections.length === 0) return null;

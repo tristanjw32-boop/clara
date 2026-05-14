@@ -15,7 +15,7 @@ function cashBurnRate(d) {
 
 // ── Tool: get_financial_briefing ──────────────────────────────────────────────
 
-export async function getFinancialBriefing({ business_id, owner_name }) {
+export async function getFinancialBriefing({ business_id, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
   const { business, cash, revenue, margin, ar } = d;
   if (owner_name) business.owner = owner_name;
@@ -65,7 +65,8 @@ export async function getFinancialBriefing({ business_id, owner_name }) {
 
   const insight = await claraAnalyze(
     `Write a morning financial briefing for ${business.owner} at ${business.name}. Lead with the single most important signal in one sentence. Then give 4-5 lines covering cash position, revenue trend, margin, and the most urgent alert — each as a bold label followed by the value, like: **Cash:** $14,200 — down $8K this month. No bullet points. End with a "Key Action Items" header and exactly 2-3 numbered actions they can take this week. No waffle, no padding.`,
-    context
+    context,
+    wiki_context
   );
 
   return { business: business.name, snapshot_date: d.snapshot_date, briefing: insight, raw: context };
@@ -73,7 +74,7 @@ export async function getFinancialBriefing({ business_id, owner_name }) {
 
 // ── Tool: get_cash_forecast ───────────────────────────────────────────────────
 
-export async function getCashForecast({ business_id, days, owner_name }) {
+export async function getCashForecast({ business_id, days, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
   days = validateDays(days);
   const { business, cash } = d;
@@ -113,7 +114,8 @@ export async function getCashForecast({ business_id, days, owner_name }) {
 
   const insight = await claraAnalyze(
     `Write a cash flow forecast for ${business.owner}. One sentence opener naming the biggest cash risk or opportunity. Then 4-5 lines with specific numbers — each as a bold label followed by the value, like: **Balance now:** $14,200 | **30 days:** $6,400 | **Payroll due:** $16,800 in 3 days. No bullet points. End with "Key Action Items" and 2-3 numbered actions. If there's a crunch coming, say exactly when and how much. Be direct.`,
-    context
+    context,
+    wiki_context
   );
 
   return {
@@ -128,7 +130,7 @@ export async function getCashForecast({ business_id, days, owner_name }) {
 
 // ── Tool: get_margin_analysis ─────────────────────────────────────────────────
 
-export async function getMarginAnalysis({ business_id, owner_name }) {
+export async function getMarginAnalysis({ business_id, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
   const { business, customers, margin, industry_benchmarks } = d;
   if (owner_name) business.owner = owner_name;
@@ -165,7 +167,8 @@ export async function getMarginAnalysis({ business_id, owner_name }) {
 
   const insight = await claraAnalyze(
     `Analyse the customer margin breakdown for ${business.owner} at ${business.name}. One sentence naming the single most important margin finding. Then one line per key customer as a bold label followed by the numbers, like: **Grand Meridian:** 12% margin, $4,200 profit. Call out anyone unprofitable or dragging the average. No bullet points. End with "Key Action Items" and 2-3 numbered actions with specific numbers. Name names — no vague "one client" language.`,
-    context
+    context,
+    wiki_context
   );
 
   return {
@@ -192,7 +195,7 @@ const CAPABILITY_LABELS = {
   strategic_planning: 'Strategic Planning',
 };
 
-export async function identifyValueGaps({ business_id, owner_name }) {
+export async function identifyValueGaps({ business_id, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
   const { business, capability_scores, margin, revenue, industry_benchmarks } = d;
   if (owner_name) business.owner = owner_name;
@@ -252,7 +255,8 @@ export async function identifyValueGaps({ business_id, owner_name }) {
 
   const insight = await claraAnalyze(
     `Identify the top value gaps for ${business.owner} at ${business.name}. Capability scores are auto-derived from live financial data — capability_score_sources explains what drove each score. If there are service pricing gaps, lead with those — they're the most actionable. One sentence opener on the biggest opportunity. Then one line per gap as a bold label followed by the numbers, like: **Pest Control Underpricing:** $35/hr vs $65/hr market — costs you $6,000/yr. For capability gaps, cite the underlying data (e.g. "47-day average AR collection" for an AR score of 2). No bullet points. End with "Key Action Items" — one specific first step per gap with a dollar value attached.`,
-    context
+    context,
+    wiki_context
   );
 
   return {
@@ -266,7 +270,7 @@ export async function identifyValueGaps({ business_id, owner_name }) {
 
 // ── Tool: get_ar_alerts ───────────────────────────────────────────────────────
 
-export async function getArAlerts({ business_id, owner_name }) {
+export async function getArAlerts({ business_id, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
   const { business, ar } = d;
   if (owner_name) business.owner = owner_name;
@@ -299,7 +303,8 @@ export async function getArAlerts({ business_id, owner_name }) {
 
   const insight = await claraAnalyze(
     `Write an AR alert for ${business.owner} at ${business.name}. One sentence on the total overdue amount and the cash risk. Then one line per overdue invoice as a bold label followed by the details, like: **Lakeside Suites:** $8,400 — 62 days overdue. No bullet points. End with "Key Action Items": first item should be a ready-to-send follow-up message for the most urgent invoice (write the actual message, in quotes, that ${business.owner} can copy and send right now). Then 1-2 more numbered actions.`,
-    context
+    context,
+    wiki_context
   );
 
   return {

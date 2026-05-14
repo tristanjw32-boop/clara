@@ -16,6 +16,7 @@ export const TEMPLATES = {
   'ambitions.md': `# Ambitions & Aspirations\n\n## Short-term Goals\n_Not yet known_\n\n## Long-term Vision\n_Not yet known_\n\n## Exit Plan\n_Not yet known_\n\n## Lifestyle vs Growth\n_Not yet known_\n`,
   'relationships.md': `# Relationships\n\n## Key Clients\n_Not yet known_\n\n## Key Suppliers\n_Not yet known_\n\n## Key Staff\n_Not yet known_\n\n## Advisors\n_Not yet known_\n`,
   'action_tracker.md': `# Action Tracker\n\n## Open Actions\n_None yet_\n\n## Completed Actions\n_None yet_\n\n## Ignored / Not Followed Through\n_None yet_\n`,
+  'pricing.md': `# Pricing History\n\n## Service Rates (QBO observed)\n_No observations yet_\n\n## Rate Changes Tracked\n_None yet_\n\n## Benchmark Gaps\n_Not yet assessed_\n`,
   'conversation_log.md': `# Conversation Log\n\n_Append-only. Newest entry first._\n\n`,
 };
 

@@ -16,10 +16,14 @@ Rules:
 - Speak to the owner like a trusted advisor who knows their business, not a report generator
 - Always use the owner's name when you know it`;
 
-export async function claraAnalyze(prompt, contextData) {
-  const userMessage = contextData
+export async function claraAnalyze(prompt, contextData, ownerContext = null) {
+  let userMessage = contextData
     ? `${prompt}\n\nFinancial data:\n${JSON.stringify(contextData, null, 2)}`
     : prompt;
+
+  if (ownerContext) {
+    userMessage = `${userMessage}\n\n---\n\nWhat you know about this owner (use this to personalise tone and advice):\n${ownerContext}`;
+  }
 
   const message = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
