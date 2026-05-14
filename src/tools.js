@@ -241,6 +241,7 @@ export async function identifyValueGaps({ business_id, owner_name }) {
     benchmark_net_margin: pct(industry_benchmarks.net_margin_pct),
     total_gap_vs_benchmark: fmt(totalGap),
     top_capability_gaps: gaps.map(g => ({ ...g, dollar_value: fmt(g.estimated_annual_value) })),
+    capability_score_sources: d.capability_score_sources || {},
     service_pricing_gaps: serviceGaps.map(g => ({
       ...g,
       annual_gap_value: fmt(g.estimated_annual_gap),
@@ -250,7 +251,7 @@ export async function identifyValueGaps({ business_id, owner_name }) {
   };
 
   const insight = await claraAnalyze(
-    `Identify the top value gaps for ${business.owner} at ${business.name}. If there are service pricing gaps, lead with those — they're the most actionable. One sentence opener on the biggest opportunity. Then one line per gap as a bold label followed by the numbers, like: **Pest Control Underpricing:** $35/hr vs $65/hr market — costs you $6,000/yr. No bullet points. End with "Key Action Items" — one specific first step per gap with a dollar value attached.`,
+    `Identify the top value gaps for ${business.owner} at ${business.name}. Capability scores are auto-derived from live financial data — capability_score_sources explains what drove each score. If there are service pricing gaps, lead with those — they're the most actionable. One sentence opener on the biggest opportunity. Then one line per gap as a bold label followed by the numbers, like: **Pest Control Underpricing:** $35/hr vs $65/hr market — costs you $6,000/yr. For capability gaps, cite the underlying data (e.g. "47-day average AR collection" for an AR score of 2). No bullet points. End with "Key Action Items" — one specific first step per gap with a dollar value attached.`,
     context
   );
 
@@ -336,6 +337,7 @@ export async function askClara({ business_id, question, owner_name }) {
     customers: d.customers,
     ar: d.ar,
     capability_scores: d.capability_scores,
+    capability_score_sources: d.capability_score_sources || {},
     industry_benchmarks: d.industry_benchmarks,
   };
 

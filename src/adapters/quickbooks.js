@@ -147,7 +147,7 @@ export async function loadFromQuickBooks(realmId) {
     qboQuery(realmId, "SELECT Id, TxnDate, DueDate, TotalAmt, Balance, CustomerRef FROM Invoice WHERE Balance > '0' MAXRESULTS 50"),
     qboQuery(realmId, "SELECT Id, TxnDate, DueDate, TotalAmt, Balance, VendorRef FROM Bill WHERE Balance > '0' MAXRESULTS 50"),
     qboQuery(realmId, "SELECT Id, Name, CurrentBalance FROM Account WHERE AccountType = 'Bank'"),
-    qboQuery(realmId, `SELECT Id, TxnDate, Line FROM Invoice WHERE TxnDate >= '${d90}' MAXRESULTS 200`),
+    qboQuery(realmId, `SELECT Id, TxnDate, CustomerRef, Line FROM Invoice WHERE TxnDate >= '${d90}' MAXRESULTS 200`),
   ]);
 
   const bsRows  = bs?.Rows?.Row || [];
@@ -234,6 +234,77 @@ export async function loadFromQuickBooks(realmId) {
       : null,
   })).filter(s => s.avg_rate > 0).sort((a, b) => (b.gap_pct ?? 0) - (a.gap_pct ?? 0));
 
+  // ── Capability scores — auto-computed from live QBO data ─────────────────────
+
+  // Cash Management: does the business have runway and can it cover imminent bills?
+  const billsDue7d = upcomingPayables.filter(p => p.days_until_due <= 7).reduce((s, p) => s + p.amount, 0);
+  const monthlyBurnEst = expenses30 || (revenue30 * 0.5);
+  const runwayDays = monthlyBurnEst > 0 ? (cashBalance / (monthlyBurnEst / 30)) : 99;
+  let cashMgmtScore;
+  if (billsDue7d > cashBalance)  cashMgmtScore = 1;
+  else if (runwayDays < 14)      cashMgmtScore = 2;
+  else if (runwayDays < 30)      cashMgmtScore = 3;
+  else if (runwayDays < 90)      cashMgmtScore = 4;
+  else                           cashMgmtScore = 5;
+
+  // AR Management: weighted average days outstanding across open invoices
+  const totalArAmt = invoices.reduce((s, i) => s + i.amount, 0);
+  const weightedAvgDays = totalArAmt > 0
+    ? invoices.reduce((s, i) => s + i.days_outstanding * i.amount, 0) / totalArAmt
+    : 0;
+  let arMgmtScore;
+  if (invoices.length === 0 || totalArAmt === 0) arMgmtScore = 5;
+  else if (weightedAvgDays < 21) arMgmtScore = 5;
+  else if (weightedAvgDays < 30) arMgmtScore = 4;
+  else if (weightedAvgDays < 45) arMgmtScore = 3;
+  else if (weightedAvgDays < 60) arMgmtScore = 2;
+  else                           arMgmtScore = 1;
+
+  // Pricing Strategy: proportion of tracked services below market benchmark
+  const benchmarkedSvcs  = serviceRates.filter(s => s.benchmark_rate !== null);
+  const underpricedSvcs  = benchmarkedSvcs.filter(s => s.gap_pct > 10);
+  let pricingScore;
+  if (benchmarkedSvcs.length === 0) {
+    pricingScore = 3;
+  } else if (underpricedSvcs.length === 0) {
+    pricingScore = 5;
+  } else {
+    const underpricedPct = underpricedSvcs.length / benchmarkedSvcs.length;
+    if (underpricedPct < 0.25)     pricingScore = 4;
+    else if (underpricedPct < 0.5) pricingScore = 3;
+    else if (underpricedPct < 0.75) pricingScore = 2;
+    else                            pricingScore = 1;
+  }
+
+  // Cost Control: gross margin vs 40% SMB benchmark
+  const grossGap = grossPct30 - 40;
+  let costControlScore;
+  if (grossGap > 10)       costControlScore = 5;
+  else if (grossGap > 0)   costControlScore = 4;
+  else if (grossGap > -5)  costControlScore = 3;
+  else if (grossGap > -15) costControlScore = 2;
+  else                     costControlScore = 1;
+
+  // Revenue Concentration: top customer share of 90d invoiced revenue
+  const customerRevMap = {};
+  for (const inv of invoiceLines?.Invoice || []) {
+    const cName = inv.CustomerRef?.name || 'Unknown';
+    const invTotal = (inv.Line || []).reduce((s, l) => s + parseFloat(l.Amount || 0), 0);
+    customerRevMap[cName] = (customerRevMap[cName] || 0) + invTotal;
+  }
+  const customerRevVals = Object.values(customerRevMap);
+  const totalCustRev    = customerRevVals.reduce((s, v) => s + v, 0);
+  const topCustPct      = customerRevVals.length > 0 && totalCustRev > 0
+    ? Math.max(...customerRevVals) / totalCustRev
+    : 0;
+  let clientMixScore;
+  if (customerRevVals.length === 0)  clientMixScore = 3;
+  else if (topCustPct < 0.2)         clientMixScore = 5;
+  else if (topCustPct < 0.3)         clientMixScore = 4;
+  else if (topCustPct < 0.4)         clientMixScore = 3;
+  else if (topCustPct < 0.5)         clientMixScore = 2;
+  else                               clientMixScore = 1;
+
   // Get business info
   const { rows: bizRows } = await query(
     'SELECT * FROM businesses WHERE realm_id = $1',
@@ -283,7 +354,20 @@ export async function loadFromQuickBooks(realmId) {
       current:           totalOutstanding - invoices.reduce((s, i) => s + i.amount, 0),
       invoices,
     },
-    capability_scores:   { pricing_strategy: 3, ar_management: 3, cost_control: 3, client_mix: 3, cash_management: 3 },
+    capability_scores: {
+      pricing_strategy: pricingScore,
+      ar_management:    arMgmtScore,
+      cost_control:     costControlScore,
+      client_mix:       clientMixScore,
+      cash_management:  cashMgmtScore,
+    },
+    capability_score_sources: {
+      cash_management:  `${Math.round(runwayDays)}d estimated cash runway; ${billsDue7d > cashBalance ? 'CASH CRISIS — bills exceed balance' : 'bills covered by cash'}`,
+      ar_management:    totalArAmt > 0 ? `${Math.round(weightedAvgDays)}d weighted-avg days outstanding across ${invoices.length} open invoices` : 'No open AR',
+      pricing_strategy: benchmarkedSvcs.length > 0 ? `${underpricedSvcs.length}/${benchmarkedSvcs.length} services below market benchmark` : 'No benchmark data',
+      cost_control:     `${grossPct30.toFixed(1)}% gross margin vs 40% benchmark (${grossGap >= 0 ? '+' : ''}${grossGap.toFixed(1)}pp)`,
+      client_mix:       customerRevVals.length > 0 ? `Top customer is ${(topCustPct * 100).toFixed(0)}% of 90d revenue` : 'No customer revenue data',
+    },
     industry_benchmarks: { gross_margin_pct: 40, net_margin_pct: 15 },
     market_data:         null,
   };
