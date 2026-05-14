@@ -37,7 +37,7 @@ export async function getFinancialBriefing({ business_id, owner_name }) {
     .slice(0, 5);
 
   const urgentAlert = totalDueSoon > cash.current_balance
-    ? `CASH CRISIS: $${fmt(totalDueSoon)} in bills due within 7 days but only $${fmt(cash.current_balance)} in the bank. Net position: -$${fmt(Math.abs(cashAfterBills))} if nothing is collected.`
+    ? `CASH CRISIS: ${fmt(totalDueSoon)} in bills due within 7 days but only ${fmt(cash.current_balance)} in the bank. Net position: -${fmt(Math.abs(cashAfterBills))} if nothing is collected.`
     : overdue > 20000
       ? `${fmt(overdue)} in overdue AR`
       : cashChange < -10000
@@ -57,8 +57,8 @@ export async function getFinancialBriefing({ business_id, owner_name }) {
     gross_margin_vs_prior_year: pct(margin.gross_pct_prior_year),
     net_margin_pct: pct(margin.net_pct_30d),
     ar_total_overdue: fmt(overdue),
-    ar_top_overdue_invoices: topOverdue.map(i => `${i.customer}: $${fmt(i.amount)} (${i.days_outstanding}d overdue)`),
-    bills_due_within_7_days: payablesDueShortly.map(p => `${p.vendor}: $${fmt(p.amount)} due in ${p.days_until_due}d`),
+    ar_top_overdue_invoices: topOverdue.map(i => `${i.customer}: ${fmt(i.amount)} (${i.days_outstanding}d overdue)`),
+    bills_due_within_7_days: payablesDueShortly.map(p => `${p.vendor}: ${fmt(p.amount)} due in ${p.days_until_due}d`),
     cash_after_imminent_bills: fmt(cashAfterBills),
     most_urgent_alert: urgentAlert,
   };
@@ -244,7 +244,7 @@ export async function identifyValueGaps({ business_id, owner_name }) {
     service_pricing_gaps: serviceGaps.map(g => ({
       ...g,
       annual_gap_value: fmt(g.estimated_annual_gap),
-      summary: `${g.service}: charging $${g.current_rate}/hr vs $${g.benchmark_rate}/hr market — ${g.job_count_90d} jobs in 90 days, leaving $${fmt(g.estimated_annual_gap)}/yr on the table`,
+      summary: `${g.service}: charging $${g.current_rate}/hr vs $${g.benchmark_rate}/hr market — ${g.job_count_90d} jobs in 90 days, leaving ${fmt(g.estimated_annual_gap)}/yr on the table`,
     })),
     market_data: d.market_data || null,
   };
