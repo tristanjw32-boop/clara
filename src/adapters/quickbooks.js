@@ -69,21 +69,33 @@ async function refreshToken(token) {
   return data.access_token;
 }
 
-// ── QBO API fetcher ───────────────────────────────────────────────────────────
+// ── QBO API fetchers ──────────────────────────────────────────────────────────
 
 async function qboReport(realmId, reportName, params = {}) {
   const accessToken = await getValidToken(realmId);
   const qs = new URLSearchParams({ minorversion: '65', ...params }).toString();
   const url = `${qboBase()}/v3/company/${realmId}/reports/${reportName}?${qs}`;
-
   const res = await fetch(url, {
-    headers: {
-      'Authorization': `Bearer ${accessToken}`,
-      'Accept':        'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' },
   });
   if (!res.ok) throw new Error(`QBO ${reportName} failed: ${res.status}`);
   return res.json();
+}
+
+async function qboReportSafe(realmId, reportName, params = {}) {
+  try { return await qboReport(realmId, reportName, params); } catch (_) { return null; }
+}
+
+async function qboQuery(realmId, sql) {
+  const accessToken = await getValidToken(realmId);
+  const qs = new URLSearchParams({ query: sql, minorversion: '65' }).toString();
+  const url = `${qboBase()}/v3/company/${realmId}/query?${qs}`;
+  const res = await fetch(url, {
+    headers: { 'Authorization': `Bearer ${accessToken}`, 'Accept': 'application/json' },
+  });
+  if (!res.ok) throw new Error(`QBO query failed: ${res.status}`);
+  const body = await res.json();
+  return body.QueryResponse;
 }
 
 // ── Report parsers ────────────────────────────────────────────────────────────
@@ -127,22 +139,27 @@ export async function loadFromQuickBooks(realmId) {
   const endPY   = fmtDate(new Date(today.getFullYear() - 1, 11, 31));
   const todayStr = fmtDate(today);
 
-  const [bs, pl30, pl90, arAging, plPY] = await Promise.all([
-    qboReport(realmId, 'BalanceSheet',            { date: todayStr }),
-    qboReport(realmId, 'ProfitAndLoss',            { start_date: d30, end_date: todayStr }),
-    qboReport(realmId, 'ProfitAndLoss',            { start_date: d90, end_date: todayStr }),
-    qboReport(realmId, 'AgedReceivablesSummary',   { report_date: todayStr }),
-    qboReport(realmId, 'ProfitAndLoss',            { start_date: startPY, end_date: endPY }),
+  const [bs, pl30, pl90, plPY, openInvoices, openBills, bankAccounts, invoiceLines] = await Promise.all([
+    qboReportSafe(realmId, 'BalanceSheet',  { date: todayStr }),
+    qboReportSafe(realmId, 'ProfitAndLoss', { start_date: d30, end_date: todayStr }),
+    qboReportSafe(realmId, 'ProfitAndLoss', { start_date: d90, end_date: todayStr }),
+    qboReportSafe(realmId, 'ProfitAndLoss', { start_date: startPY, end_date: endPY }),
+    qboQuery(realmId, "SELECT Id, TxnDate, DueDate, TotalAmt, Balance, CustomerRef FROM Invoice WHERE Balance > '0' MAXRESULTS 50"),
+    qboQuery(realmId, "SELECT Id, TxnDate, DueDate, TotalAmt, Balance, VendorRef FROM Bill WHERE Balance > '0' MAXRESULTS 50"),
+    qboQuery(realmId, "SELECT Id, Name, CurrentBalance FROM Account WHERE AccountType = 'Bank'"),
+    qboQuery(realmId, `SELECT Id, TxnDate, Line FROM Invoice WHERE TxnDate >= '${d90}' MAXRESULTS 200`),
   ]);
 
-  const bsRows  = bs.Rows?.Row || [];
-  const pl30r   = pl30.Rows?.Row || [];
-  const pl90r   = pl90.Rows?.Row || [];
-  const plPYr   = plPY.Rows?.Row || [];
-  const arRows  = arAging.Rows?.Row || [];
+  const bsRows  = bs?.Rows?.Row || [];
+  const pl30r   = pl30?.Rows?.Row || [];
+  const pl90r   = pl90?.Rows?.Row || [];
+  const plPYr   = plPY?.Rows?.Row || [];
+  const rawInvoices = openInvoices?.Invoice || [];
+  const rawBills    = openBills?.Bill || [];
 
-  // Cash
-  const cashBalance = sumSection(bsRows, 'bank accounts') || findRow(bsRows, 'checking') || 0;
+  // Cash — sum all bank accounts directly (more reliable than parsing BS report)
+  const cashBalance = (bankAccounts?.Account || [])
+    .reduce((s, a) => s + parseFloat(a.CurrentBalance || 0), 0);
 
   // Revenue
   const revenue30  = sumSection(pl30r, 'income') || 0;
@@ -160,30 +177,62 @@ export async function loadFromQuickBooks(realmId) {
   const netPct30   = revenue30 > 0 ? ((revenue30 - cogs30 - expenses30) / revenue30 * 100) : 0;
   const grossPctPY = revenuePY > 0 ? ((revenuePY - (sumSection(plPYr, 'cost of goods') || 0)) / revenuePY * 100) : 0;
 
-  // AR
-  const totalOutstanding = arRows.reduce((s, r) => {
-    const total = parseFloat(r.ColData?.[r.ColData.length - 1]?.value || '0');
-    return s + (isNaN(total) ? 0 : total);
-  }, 0);
+  // AR — built from open invoice query
+  const todayMs = new Date(todayStr).getTime();
+  const invoices = rawInvoices.map((inv, i) => {
+    const balance = parseFloat(inv.Balance || '0');
+    const dueDate = inv.DueDate ? new Date(inv.DueDate).getTime() : todayMs;
+    const daysOverdue = Math.floor((todayMs - dueDate) / 86_400_000);
+    return {
+      id:               `inv-${inv.Id || i}`,
+      customer:         inv.CustomerRef?.name || 'Unknown',
+      amount:           balance,
+      days_outstanding: Math.max(0, daysOverdue),
+      due_date:         inv.DueDate || todayStr,
+    };
+  });
+  const totalOutstanding = invoices.reduce((s, i) => s + i.amount, 0);
 
-  // Build AR invoices list from aging rows (>30 days = overdue)
-  const invoices = arRows
-    .filter(r => r.type === 'Data')
-    .map((r, i) => {
-      const cols = r.ColData || [];
-      const over30  = parseFloat(cols[3]?.value || '0');
-      const over60  = parseFloat(cols[4]?.value || '0');
-      const over90  = parseFloat(cols[5]?.value || '0');
-      const overdue = over30 + over60 + over90;
-      if (overdue <= 0) return null;
-      return {
-        id:               `inv-${i}`,
-        customer:         cols[0]?.value || 'Unknown',
-        amount:           overdue,
-        days_outstanding: over90 > 0 ? 90 : over60 > 0 ? 60 : 35,
-      };
-    })
-    .filter(Boolean);
+  // Upcoming payables from open bills
+  const upcomingPayables = rawBills.map(bill => ({
+    vendor:    bill.VendorRef?.name || 'Unknown',
+    amount:    parseFloat(bill.Balance || '0'),
+    due_date:  bill.DueDate || '',
+    days_until_due: Math.floor((new Date(bill.DueDate).getTime() - todayMs) / 86_400_000),
+  })).sort((a, b) => a.days_until_due - b.days_until_due);
+
+  // Service rates — aggregate invoice lines by item to compute avg rate per unit
+  // Industry benchmarks: Pest Control ~$65/hr, Trimming ~$55/hr, Installation ~$80/hr, Design ~$100/hr
+  const SERVICE_BENCHMARKS = {
+    'Pest Control': 65, 'Trimming': 55, 'Installation': 80, 'Design': 100,
+    'Maintenance & Repair': 70, 'Gardening': 55, 'Lighting': 75,
+  };
+  const serviceMap = {};
+  for (const inv of invoiceLines?.Invoice || []) {
+    for (const line of inv.Line || []) {
+      const detail = line.SalesItemLineDetail;
+      if (!detail) continue;
+      const name = detail.ItemRef?.name;
+      const qty  = parseFloat(detail.Qty || 1);
+      const rate = parseFloat(detail.UnitPrice || 0);
+      const amt  = parseFloat(line.Amount || 0);
+      if (!name || rate === 0 || amt === 0) continue;
+      if (!serviceMap[name]) serviceMap[name] = { total_revenue: 0, total_qty: 0, job_count: 0 };
+      serviceMap[name].total_revenue += amt;
+      serviceMap[name].total_qty     += qty;
+      serviceMap[name].job_count     += 1;
+    }
+  }
+  const serviceRates = Object.entries(serviceMap).map(([name, s]) => ({
+    service:       name,
+    avg_rate:      s.total_qty > 0 ? Math.round(s.total_revenue / s.total_qty) : 0,
+    total_revenue: Math.round(s.total_revenue),
+    job_count:     s.job_count,
+    benchmark_rate: SERVICE_BENCHMARKS[name] ?? null,
+    gap_pct: SERVICE_BENCHMARKS[name]
+      ? Math.round(((SERVICE_BENCHMARKS[name] - (s.total_revenue / s.total_qty)) / SERVICE_BENCHMARKS[name]) * 100)
+      : null,
+  })).filter(s => s.avg_rate > 0).sort((a, b) => (b.gap_pct ?? 0) - (a.gap_pct ?? 0));
 
   // Get business info
   const { rows: bizRows } = await query(
@@ -204,12 +253,12 @@ export async function loadFromQuickBooks(realmId) {
     },
     snapshot_date: todayStr,
     cash: {
-      current_balance: cashBalance,
-      '30d_ago':       cashBalance, // QBO BS is point-in-time; use current as approximation
-      '60d_ago':       cashBalance,
-      '90d_ago':       cashBalance,
-      accounts:        [],
-      upcoming_payables: [],
+      current_balance:   cashBalance,
+      '30d_ago':         cashBalance,
+      '60d_ago':         cashBalance,
+      '90d_ago':         cashBalance,
+      accounts:          [],
+      upcoming_payables: upcomingPayables,
     },
     revenue: {
       last_30d:       revenue30,
@@ -227,7 +276,8 @@ export async function loadFromQuickBooks(realmId) {
       net_pct_30d:         netPct30,
       net_pct_90d:         netPct30,
     },
-    customers: [],  // QBO customer breakdown requires transaction-level queries — Phase 1B
+    customers: [],
+    service_rates: serviceRates,
     ar: {
       total_outstanding: totalOutstanding,
       current:           totalOutstanding - invoices.reduce((s, i) => s + i.amount, 0),

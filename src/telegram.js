@@ -3,6 +3,7 @@
  * Webhook-based. Auto-registers on startup when TELEGRAM_BOT_TOKEN is set.
  */
 
+import { createHmac } from 'crypto';
 import Anthropic from '@anthropic-ai/sdk';
 import { logChatEvent } from './events.js';
 import { seedWiki, deleteWiki } from './wiki.js';
@@ -22,6 +23,23 @@ import { validateQuestion } from './validate.js';
 // In-memory cache of session objects for the lifetime of a conversation.
 // Persisted to Postgres on every state change via saveSession().
 const sessionCache = new Map();
+
+// ── QBO connect link helpers ─────────────────────────────────────────────────
+
+function signChatId(chatId) {
+  return createHmac('sha256', process.env.CLARA_API_KEY || '')
+    .update(`tg:${chatId}`)
+    .digest('hex');
+}
+
+function connectUrl(chatId) {
+  const sig = signChatId(chatId);
+  return `https://clara.aerosensei.com/connect?tg=${chatId}.${sig}`;
+}
+
+export function invalidateSession(chatId) {
+  sessionCache.delete(chatId);
+}
 
 const MAIN_KEYBOARD = {
   keyboard: [
@@ -167,6 +185,7 @@ async function runTool(token, chatId, businessId, toolFn, textKey) {
     if (session) logTurn(session, 'clara', text);
     scheduleCurator(chatId);
   } catch (err) {
+    logChatEvent({ event: 'run_tool_error', chatId, businessId, error: err.message, stack: err.stack?.slice(0, 400) });
     await send(token, chatId, 'Something went wrong — try again in a moment.');
   }
 }
@@ -223,6 +242,14 @@ export async function handleUpdate(update, token) {
     await deleteWiki(chatId);
     sessionCache.delete(chatId);
     return send(token, chatId, "Done — all your data has been deleted. Your conversation history, financial profile, and memory wiki have been removed. Send /start to begin again.");
+  }
+
+  // ── /connect ──
+  if (text === '/connect') {
+    const url = connectUrl(chatId);
+    return send(token, chatId,
+      `🔗 <b>Connect your QuickBooks</b>\n\nTap the link below to authorise Clara to read your accounting data. It takes about 30 seconds — Clara only reads, it can never make changes.\n\n<a href="${url}">Connect QuickBooks →</a>\n\n<i>Once connected, all your briefings will use your actual numbers instead of a demo business.</i>`
+    );
   }
 
   // ── /start and /help ──
@@ -354,7 +381,7 @@ export async function handleUpdate(update, token) {
       });
 
       const intro   = fmt(result.welcome);
-      const footer  = `\n\n<i>This is based on a similar business — <a href="https://clara.aerosensei.com/connect">connect your accounting software</a> to see your actual numbers.</i>`;
+      const footer  = `\n\n<i>This is based on a similar business — <a href="${connectUrl(chatId)}">connect your accounting software</a> to see your actual numbers.</i>`;
       const checkin = `\n\n<i>I'll check in with you tomorrow. Type <b>mute</b> any time to turn that off.</i>`;
 
       scheduleFollowUp(token, chatId, fields.name);

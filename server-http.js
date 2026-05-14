@@ -6,6 +6,7 @@
  * Endpoint: POST/GET/DELETE https://clara.aerosensei.com/mcp
  * Auth:     Authorization: Bearer <CLARA_API_KEY>
  */
+import { createHmac } from 'crypto';
 import express from 'express';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -22,6 +23,22 @@ const { ANTHROPIC_API_KEY, CLARA_API_KEY, PORT = 3030 } = process.env;
 if (!ANTHROPIC_API_KEY) { console.error('ANTHROPIC_API_KEY not set'); process.exit(1); }
 if (!CLARA_API_KEY)     { console.error('CLARA_API_KEY not set — add it to /opt/clara/.env'); process.exit(1); }
 
+function signTgState(chatId) {
+  return createHmac('sha256', CLARA_API_KEY).update(`tg:${chatId}`).digest('hex');
+}
+
+// Verify and extract chat_id from a tg OAuth state string ("tg:{chatId}:{sig}")
+function parseTgState(state) {
+  if (!state?.startsWith('tg:')) return null;
+  const parts = state.split(':');
+  const chatId = parts[1];
+  const sig    = parts[2];
+  if (!chatId || !sig) return null;
+  if (!/^\d{5,20}$/.test(chatId)) return null;
+  const expected = signTgState(chatId);
+  return sig === expected ? chatId : null;
+}
+
 import {
   getFinancialBriefing,
   getCashForecast,
@@ -33,7 +50,7 @@ import {
 } from './src/tools.js';
 
 import { landingPage, connectPage, connectedPage, demoPage } from './src/pages.js';
-import { handleUpdate, registerWebhook } from './src/telegram.js';
+import { handleUpdate, registerWebhook, invalidateSession } from './src/telegram.js';
 import { getChatEvents } from './src/events.js';
 import { bootstrapSchema, query } from './src/db.js';
 import { migrateFileWikis } from './src/wiki.js';
@@ -228,16 +245,26 @@ app.get('/', (_req, res) => {
   res.send(landingPage());
 });
 
-app.get('/connect', (_req, res) => {
+app.get('/connect', (req, res) => {
   const qbConfigured = !!(process.env.QUICKBOOKS_CLIENT_ID && process.env.QUICKBOOKS_CLIENT_SECRET);
   let qbAuthUrl = null;
   if (qbConfigured) {
+    // If a verified tg param came from the Telegram bot, embed it in OAuth state
+    // so the callback can link the QBO realm_id back to the chat_id.
+    let state = Math.random().toString(36).slice(2);
+    const tgParam = req.query.tg; // format: "{chatId}.{sig}"
+    if (tgParam) {
+      const [chatId, sig] = String(tgParam).split('.');
+      if (chatId && sig && /^\d{5,20}$/.test(chatId) && sig === signTgState(chatId)) {
+        state = `tg:${chatId}:${sig}`;
+      }
+    }
     const params = new URLSearchParams({
       client_id:     process.env.QUICKBOOKS_CLIENT_ID,
       response_type: 'code',
       scope:         'com.intuit.quickbooks.accounting',
       redirect_uri:  process.env.QUICKBOOKS_REDIRECT_URI || 'https://clara.aerosensei.com/auth/quickbooks/callback',
-      state:         Math.random().toString(36).slice(2),
+      state,
     });
     qbAuthUrl = `https://appcenter.intuit.com/connect/oauth2?${params}`;
   }
@@ -246,7 +273,7 @@ app.get('/connect', (_req, res) => {
 });
 
 app.get('/auth/quickbooks/callback', async (req, res) => {
-  const { code, realmId, error } = req.query;
+  const { code, realmId, state, error } = req.query;
   if (error || !code || !realmId) {
     res.redirect('/connect?error=cancelled');
     return;
@@ -295,17 +322,43 @@ app.get('/auth/quickbooks/callback', async (req, res) => {
       [realmId]
     );
 
-    log('info', 'qb_connected', { realmId });
-    res.redirect('/connected');
+    // Link to Telegram session if OAuth state carries a verified chat_id
+    const linkedChatId = parseTgState(state);
+    if (linkedChatId) {
+      await query(
+        `UPDATE telegram_sessions
+         SET business_id = $1, stage = 'active', updated_at = NOW()
+         WHERE chat_id = $2`,
+        [realmId, BigInt(linkedChatId)]
+      );
+      invalidateSession(Number(linkedChatId));
+
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (botToken) {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id:    Number(linkedChatId),
+            text:       '✅ <b>QuickBooks connected!</b>\n\nI can now see your actual numbers. Tap <b>📊 Morning Briefing</b> for your first real insight.',
+            parse_mode: 'HTML',
+          }),
+        }).catch(err => log('warn', 'tg_notify_failed', { error: err.message }));
+      }
+      log('info', 'qb_telegram_linked', { realmId, chatId: linkedChatId });
+    }
+
+    log('info', 'qb_connected', { realmId, linkedChatId });
+    res.redirect(linkedChatId ? '/connected?via=telegram' : '/connected');
   } catch (err) {
     log('error', 'qb_callback_error', { error: err.message });
     res.redirect('/connect?error=server');
   }
 });
 
-app.get('/connected', (_req, res) => {
+app.get('/connected', (req, res) => {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(connectedPage({ apiKey: CLARA_API_KEY, businessName: null }));
+  res.send(connectedPage({ apiKey: CLARA_API_KEY, businessName: null, viaTelegram: req.query.via === 'telegram' }));
 });
 
 app.get('/demo', (_req, res) => {

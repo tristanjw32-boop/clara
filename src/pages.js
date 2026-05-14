@@ -1093,7 +1093,7 @@ export function connectPage({ qbConfigured, qbAuthUrl }) {
 
 // ── Connected page ────────────────────────────────────────────────────────────
 
-export function connectedPage({ apiKey, businessName }) {
+export function connectedPage({ apiKey, businessName, viaTelegram = false }) {
   const hermesSnippet = JSON.stringify({
     mcpServers: {
       clara: {
@@ -1119,6 +1119,7 @@ export function connectedPage({ apiKey, businessName }) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clara is connected — Clara</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   ${FONTS}
   <style>
     ${BASE_CSS}
@@ -1152,7 +1153,6 @@ export function connectedPage({ apiKey, businessName }) {
       grid-template-columns: 1fr 1fr;
       gap: 2rem;
       margin-bottom: 3rem;
-      max-width: 532px;
     }
 
     @media (max-width: 720px) {
@@ -1162,6 +1162,8 @@ export function connectedPage({ apiKey, businessName }) {
     .step-card {
       border: 1px solid var(--border);
       padding: 1.75rem;
+      min-width: 0;
+      overflow: hidden;
     }
 
     .step-label {
@@ -1338,6 +1340,26 @@ export function connectedPage({ apiKey, businessName }) {
   <div class="connected-wrap">
     <div class="status-badge">Connected${businessName ? ` · ${businessName}` : ''}</div>
     <h1>Clara is ready.</h1>
+
+    ${viaTelegram ? `
+    <p class="lead">Your QuickBooks is connected. Head back to Telegram and start asking questions about your business.</p>
+
+    <div class="step-grid" style="grid-template-columns:1fr;max-width:560px">
+      <div class="step-card" style="text-align:center;padding:2.5rem 2rem">
+        <div style="font-size:3rem;margin-bottom:1rem">💬</div>
+        <h3 style="margin-bottom:0.5rem">Go back to Telegram</h3>
+        <p style="margin-bottom:1.5rem">Your real financial data is ready. Tap <strong>📊 Morning Briefing</strong> to see your first insight.</p>
+        <a href="https://t.me/ClaraCFO_bot" class="cta-btn" style="display:inline-block;text-decoration:none">Open Telegram →</a>
+      </div>
+    </div>
+
+    <div class="try-asking">
+      <h3>Things to ask Clara</h3>
+      <ul class="questions">
+        ${exampleQuestions.map(q => `<li>${q}</li>`).join('\n        ')}
+      </ul>
+    </div>
+    ` : `
     <p class="lead">Your accounting software is connected. Add Clara to your AI assistant and start asking questions about your business.</p>
 
     <div class="step-grid">
@@ -1397,6 +1419,7 @@ export function connectedPage({ apiKey, businessName }) {
         ${exampleQuestions.map(q => `<li>${q}</li>`).join('\n        ')}
       </ul>
     </div>
+    `}
   </div>
 
   ${footerHtml()}

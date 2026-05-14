@@ -25,6 +25,25 @@ export async function getFinancialBriefing({ business_id, owner_name }) {
   const cashChange = cash.current_balance - cash['30d_ago'];
   const overdue = ar.total_outstanding - ar.current;
 
+  const payablesDueShortly = (cash.upcoming_payables || [])
+    .filter(p => p.days_until_due <= 7)
+    .sort((a, b) => a.days_until_due - b.days_until_due);
+  const totalDueSoon = payablesDueShortly.reduce((s, p) => s + p.amount, 0);
+  const cashAfterBills = cash.current_balance - totalDueSoon;
+
+  const topOverdue = (ar.invoices || [])
+    .filter(i => i.days_outstanding > 0)
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  const urgentAlert = totalDueSoon > cash.current_balance
+    ? `CASH CRISIS: $${fmt(totalDueSoon)} in bills due within 7 days but only $${fmt(cash.current_balance)} in the bank. Net position: -$${fmt(Math.abs(cashAfterBills))} if nothing is collected.`
+    : overdue > 20000
+      ? `${fmt(overdue)} in overdue AR`
+      : cashChange < -10000
+        ? `Cash dropped ${fmt(Math.abs(cashChange))} in the last 30 days`
+        : `Gross margin is ${margin.gross_pct_30d < margin.gross_pct_prior_year ? 'compressing' : 'stable'}`;
+
   const context = {
     owner: business.owner,
     business: business.name,
@@ -37,12 +56,11 @@ export async function getFinancialBriefing({ business_id, owner_name }) {
     gross_margin_pct: pct(margin.gross_pct_30d),
     gross_margin_vs_prior_year: pct(margin.gross_pct_prior_year),
     net_margin_pct: pct(margin.net_pct_30d),
-    ar_overdue: fmt(overdue),
-    most_urgent_alert: overdue > 20000
-      ? `${fmt(overdue)} in overdue AR`
-      : cashChange < -10000
-        ? `Cash dropped ${fmt(Math.abs(cashChange))} in the last 30 days`
-        : `Gross margin is ${margin.gross_pct_30d < margin.gross_pct_prior_year ? 'compressing' : 'stable'}`,
+    ar_total_overdue: fmt(overdue),
+    ar_top_overdue_invoices: topOverdue.map(i => `${i.customer}: $${fmt(i.amount)} (${i.days_outstanding}d overdue)`),
+    bills_due_within_7_days: payablesDueShortly.map(p => `${p.vendor}: $${fmt(p.amount)} due in ${p.days_until_due}d`),
+    cash_after_imminent_bills: fmt(cashAfterBills),
+    most_urgent_alert: urgentAlert,
   };
 
   const insight = await claraAnalyze(
@@ -66,7 +84,7 @@ export async function getCashForecast({ business_id, days, owner_name }) {
 
   const projections = [30, 60, 90].filter(n => n <= days).map(horizon => {
     const outflows = (cash.upcoming_payables || [])
-      .filter(p => p.due_in_days <= horizon)
+      .filter(p => (p.days_until_due ?? p.due_in_days ?? 0) <= horizon)
       .reduce((s, p) => s + p.amount, 0);
     const inflows = horizon <= 45 ? expectedArCollections * 0.6 : expectedArCollections;
     const projected = cash.current_balance - outflows + inflows;
@@ -190,13 +208,30 @@ export async function identifyValueGaps({ business_id, owner_name }) {
     .filter(([, score]) => score <= 2)
     .map(([key, score]) => {
       const label = CAPABILITY_LABELS[key] || key;
-      // Rough dollar value: low-scoring caps contribute proportionally to the total gap
       const weight = (3 - score) / Object.values(capability_scores).filter(s => s <= 2).reduce((sum, s) => sum + (3 - s), 0);
       const dollarImpact = Math.round(totalGap * weight);
       return { capability: label, current_score: score, target_score: score + 2, estimated_annual_value: dollarImpact };
     })
     .sort((a, b) => b.estimated_annual_value - a.estimated_annual_value)
     .slice(0, 3);
+
+  // Service-level underpricing gaps (from QBO invoice line data if available)
+  const serviceGaps = (d.service_rates || [])
+    .filter(s => s.benchmark_rate && s.gap_pct > 10)
+    .map(s => {
+      const annualJobs  = Math.round(s.job_count * (365 / 90));
+      const avgHrs      = s.total_qty > 0 ? s.total_revenue / s.avg_rate / s.job_count : 1;
+      const annualGap   = Math.round(annualJobs * avgHrs * (s.benchmark_rate - s.avg_rate));
+      return {
+        service:        s.service,
+        current_rate:   s.avg_rate,
+        benchmark_rate: s.benchmark_rate,
+        gap_pct:        s.gap_pct,
+        job_count_90d:  s.job_count,
+        estimated_annual_gap: annualGap,
+      };
+    })
+    .sort((a, b) => b.estimated_annual_gap - a.estimated_annual_gap);
 
   const context = {
     owner: business.owner,
@@ -205,13 +240,17 @@ export async function identifyValueGaps({ business_id, owner_name }) {
     current_net_margin: pct(margin.net_pct_90d),
     benchmark_net_margin: pct(industry_benchmarks.net_margin_pct),
     total_gap_vs_benchmark: fmt(totalGap),
-    top_gaps: gaps.map(g => ({ ...g, dollar_value: fmt(g.estimated_annual_value) })),
-    all_scores: Object.entries(capability_scores).map(([k, v]) => ({ capability: CAPABILITY_LABELS[k] || k, score: v })),
+    top_capability_gaps: gaps.map(g => ({ ...g, dollar_value: fmt(g.estimated_annual_value) })),
+    service_pricing_gaps: serviceGaps.map(g => ({
+      ...g,
+      annual_gap_value: fmt(g.estimated_annual_gap),
+      summary: `${g.service}: charging $${g.current_rate}/hr vs $${g.benchmark_rate}/hr market — ${g.job_count_90d} jobs in 90 days, leaving $${fmt(g.estimated_annual_gap)}/yr on the table`,
+    })),
     market_data: d.market_data || null,
   };
 
   const insight = await claraAnalyze(
-    `Identify the top 3 value gaps for ${business.owner} at ${business.name}. One sentence opener on the biggest opportunity. Then one line per gap as a bold label followed by the numbers, like: **AR Management:** score 2/5 — fixing this is worth $18,000/yr. No bullet points. End with "Key Action Items" — one specific first step per gap, numbered. Dollar values must be specific — use the data, not guesses.`,
+    `Identify the top value gaps for ${business.owner} at ${business.name}. If there are service pricing gaps, lead with those — they're the most actionable. One sentence opener on the biggest opportunity. Then one line per gap as a bold label followed by the numbers, like: **Pest Control Underpricing:** $35/hr vs $65/hr market — costs you $6,000/yr. No bullet points. End with "Key Action Items" — one specific first step per gap with a dollar value attached.`,
     context
   );
 

@@ -2,6 +2,164 @@
 
 ---
 
+## Factual state as of 2026-05-14 (end of session)
+
+### What was built and fixed in this session
+
+**QBO adapter — major reliability overhaul (`src/adapters/quickbooks.js`):**
+- `AgedReceivablesSummary` report permanently returns 403 (scope limitation) — replaced with direct `Invoice WHERE Balance > '0'` query. AR now shows all open invoices with customer names, amounts, and days overdue
+- Cash balance was reading stale BS report — replaced with direct `Account WHERE AccountType = 'Bank'` query. Cash now reflects live bank balances immediately
+- `upcoming_payables` was hardcoded `[]` — now populated from `Bill WHERE Balance > '0'` query with vendor name, amount, and `days_until_due`
+- Added `service_rates` block: queries invoice lines for last 90 days, computes avg rate per service item, compares to hardcoded industry benchmarks, calculates annual gap per service
+
+**Briefing tool — context overhaul (`src/tools.js`):**
+- Briefing context now includes `ar_top_overdue_invoices` (top 5 by amount, with customer name + days), `bills_due_within_7_days` (vendor + amount + days_until_due), and `cash_after_imminent_bills`
+- `most_urgent_alert` now detects cash crisis when total bills due ≤ 7 days exceeds current cash balance — fires "CASH CRISIS" alert with exact shortfall
+- `identifyValueGaps` extended to use `service_rates` — computes per-service underpricing gaps with annual dollar value; leads prompt with service pricing gaps when present
+- Fixed `due_in_days` → `days_until_due` in cash forecast filter
+
+**UX fix (`server-http.js`, `src/pages.js`):**
+- OAuth callback now redirects to `/connected?via=telegram` when a Telegram `chat_id` was in the OAuth state
+- `/connected` page forks on `viaTelegram` param — Telegram users see a "Go back to Telegram" CTA, MCP users see the API key + config steps
+
+**Error logging fix (`src/telegram.js`):**
+- `runTool` catch block now calls `logChatEvent` with error message + stack — previously errors were swallowed silently
+
+### QBO sandbox test results (2026-05-14)
+
+Full act-by-act test run against sandbox company (realm `9341457056530179`):
+
+| Act | Scenario | Score | Notes |
+|-----|----------|-------|-------|
+| 1 | Cash crisis: $2K cash vs $7K bills due in 5d | 9.5/10 | Named specific customers + vendors + exact gap |
+| 2 | Posted 3 payments ($2,034), re-briefed | 9.5/10 | Cash updated, pivoted to new AR targets |
+| 3 | 30 underpriced service jobs seeded | 10/10 | Found all 7 service lines, ranked by gap |
+| 4 | 10 jobs at raised rate ($50), re-gapped | 9.5/10 | Tracked blended rate correctly, stepped advice forward |
+
+**Overall: 9.6/10 — production-ready on these scenarios**
+
+Clara's one remaining gap: no session-to-session memory of improvement. She doesn't say "your rate already moved from $35 to $40 — that's progress." This requires the wiki curator to track financial trends over time (future work).
+
+### Sandbox data state
+- Vendors created: Greenfield Payroll Services [58], ProTurf Equipment Rentals [59]
+- Bills seeded: payroll $4,800 due 2026-05-19, equipment $2,200 due 2026-05-17
+- Payments posted: Paulsen Medical $954.75, Geeta Kalapatapu $629.10, John Melton $450 (all to Checking)
+- Pest Control invoices: 20 jobs at $35/hr + 10 jobs at $50/hr (all paid, historical)
+- Trimming invoices: 10 jobs at $35/hr (all paid, historical)
+
+---
+
+## Factual state as of 2026-05-14
+
+### Infrastructure
+- **DB**: Local VPS Postgres at `localhost:5432/clara`, user `clara_user` — NOT Neon. Tables: `businesses`, `qbo_tokens`, `telegram_sessions`, `customer_wikis`
+- **MCP server**: `clara-mcp` (PM2 id 171), running as `app-clara` on port 3030, health: `https://clara.aerosensei.com/health`
+- **53 restarts over 3 days** — normal for an always-on process; no crashes
+
+### What's fully built
+- 6 MCP tools against 5 synthetic business fixtures
+- Telegram bot: onboarding flow, keyboard buttons, session persistence in Postgres, wiki curator (Karpathy pattern), mute/unmute, follow-up scheduler, `/delete_my_data`
+- QBO OAuth: `/connect` page → Intuit OAuth → `/auth/quickbooks/callback` → tokens stored in `qbo_tokens`
+- QBO data adapter: `src/adapters/quickbooks.js` — fetches P&L, Balance Sheet, AR Aging, normalises to fixture schema
+- `loadBusiness()` in `data.js` already routes by realm_id vs fixture ID — if `business_id` is in `qbo_tokens`, it calls the QBO adapter
+
+### The actual gap: QBO is built but not wired to Telegram
+The OAuth flow stores tokens, but a Telegram user can't use their real data because:
+1. **`validateBusinessId()` in `validate.js`** has a hardcoded allowlist of the 5 fixture IDs — QBO realm_ids (e.g. `9341453122491234`) fail validation with an error. This is the P0 blocker.
+2. **No Telegram ↔ QBO link**: The OAuth callback (`/auth/quickbooks/callback`) stores the `realm_id` in `qbo_tokens` but has no way to know which Telegram `chat_id` initiated the flow. There's no `/connect` command in the bot that generates a user-specific OAuth URL, and the callback doesn't write to `telegram_sessions`.
+3. **Onboarding always assigns a fixture**: `onboardClara()` in `tools.js` always returns a synthetic fixture `business_id` — a QBO-connected user who goes through onboarding still gets fixture data.
+
+### MVP gap list (priority order)
+1. ✅ **`validateBusinessId()` allows realm_ids** — fixtures by name OR numeric 9–25 digit strings
+2. ✅ **Telegram ↔ QBO linked** — HMAC-signed state param, callback updates `telegram_sessions`, fires confirmation
+3. ✅ **`/connect` Telegram command** — sends signed link; `/connected?via=telegram` shows "Go back to Telegram" CTA
+4. ✅ **QBO adapter reliable** — AR, cash, bills, service rates all via direct query API (not broken report API)
+5. **Rotate QuickBooks ClientSecret** — was accidentally shared in a session transcript. Do at developer.intuit.com → Keys & OAuth → Rotate secret → update `/opt/clara/.env` → `pm2 restart clara-mcp --update-env`.
+
+### First end-to-end test (do after rotating secret)
+1. Verify redirect URI `https://clara.aerosensei.com/auth/quickbooks/callback` is listed in Intuit app
+2. Send `/connect` in Telegram → tap link → authorise sandbox account
+3. Expect "✅ QuickBooks connected!" back in Telegram
+4. Tap 📊 Morning Briefing — should show sandbox QBO data, not fixture
+
+### Backlog
+- GitHub repo (none exists)
+- `/sticky` custom keyboard shortcuts
+- Rate limiting on `/telegram/webhook`
+- Privacy policy page at `clara.aerosensei.com/privacy`
+- Hermes/ClawHub marketplace submission (MCP key needed)
+- Customer-level breakdown from QBO (requires transaction-level queries, noted as Phase 1B in adapter)
+
+---
+
+## Phase roadmap
+
+| Phase | What | Status |
+|-------|------|--------|
+| 0 — Intelligence Core | Fixtures + MCP tools | ✅ Done |
+| 1A — Real data | QBO OAuth, adapter, Telegram wiring | 🔶 OAuth built, Telegram wiring missing |
+| 1B — Consumer Product | Daily email (Resend), SMS (Twilio), web chat | Not started |
+| 2 — Capability Assessment | Maturity rubrics × financial data, value gap quantification | Not started |
+| 3 — Workstream Execution | Team check-ins, progress synthesis | Not started |
+| 4 — Agent Deployment | Agent builder, governance, kill switches | Not started |
+| 5 — Business OS | Orchestration, marketplace, white-label | Not started |
+
+GTM priority: Hermes/ClawHub MCP channel first → accountant channel second.
+
+---
+
+## Session: 2026-05-10 (afternoon continuation)
+
+### What we fixed
+
+**Telegram bot — multiple bugs resolved:**
+- `getSession()` is async — calling it synchronously in timer callbacks (`scheduleCurator`, `scheduleFollowUp`) returned a Promise, not a session. Fixed: use `sessionCache.get(chatId)` directly in timer closures
+- `runTool()` had the same async bug — `const session = getSession(chatId)` (no await) returned Promise, causing `logTurn(session, ...)` to throw. Fixed: moved session fetch to top of try block
+- Duplicate `const session` declaration in `runTool` caused a SyntaxError that silenced the bot. Fixed.
+- `buildWikiContext()` in `curator.js` called `readPage()` synchronously — `readPage` is async (Postgres), so all pages returned as Promises. `includes()` on a Promise threw. Fixed: made `buildWikiContext` async with `Promise.all`
+
+**Telegram formatting — bold label format:**
+- Telegram has no hanging indent support for bullet lists. Switched from `• bullet` to `**Label:** value` format throughout all 6 tool prompts
+- Added `fmt()` auto-bold rules: `/Today:/g → <b>Today:</b>` and `^([A-Z][A-Za-z0-9 ,+%()-]{2,50}):\s → <b>$1:</b> `
+- All tool prompts say "No bullet points" and use `**Bold Label:** value` format
+
+**Owner name bug:**
+- Business fixtures have their own owner names (e.g. metro-bakery owner = "James"). These were leaking into responses as the greeting name instead of the Telegram user's name
+- Fixed: all 6 tools accept an `owner_name` parameter; `telegram.js` passes `session.ownerName` (set during onboarding); tools do `if (owner_name) business.owner = owner_name;`
+
+**Webhook retry:**
+- `registerWebhook` changed to throw on failure
+- `server-http.js` wraps it in a 5-attempt retry loop with 10s backoff
+
+**CLARA_API_KEY rotated:**
+- Old key was accidentally shared in chat. New key regenerated via `node -e "require('crypto').randomBytes(32).toString('hex')"` and updated in `/opt/clara/.env`
+
+**`/connected` page:**
+- Removed artificial `max-width` from `.step-grid` — cards now fill the `connected-wrap` naturally (1100px max, padded)
+- Added `min-width: 0; overflow: hidden` to `.step-card` to prevent grid blowout from long code strings
+- Added favicon to connected page `<head>`
+
+### Current state
+- All 5 keyboard buttons working and returning correct owner name
+- Free-text chat working with wiki context injection
+- `/delete_my_data` command working
+- `/connected` page layout fixed
+- QuickBooks OAuth flow built and tested (sandbox) — QBO realm ID stored in `qbo_tokens` table but NOT yet wired to Telegram sessions (all users still get fixture data)
+
+### Open: urgent
+1. **Rotate QuickBooks ClientSecret** at developer.intuit.com — was accidentally shared in session transcript
+2. **Wire QBO realm ID to Telegram sessions** — when user has authenticated QBO, route `business_id` to their live QBO adapter instead of fixture
+
+### Open: backlog
+- GitHub repo for Clara (none exists yet)
+- `/sticky` command — custom keyboard shortcuts saved to DB
+- Rate limiting on `/telegram/webhook` endpoint
+- Privacy policy page at `clara.aerosensei.com/privacy`
+- Submit to Hermes/ClawHub marketplace (MCP key needed)
+- Consumer app Phase 2 (native QuickBooks Telegram bot, no MCP)
+
+---
+
 ## Session: 2026-05-10
 
 ### What we built

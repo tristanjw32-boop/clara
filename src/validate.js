@@ -26,10 +26,10 @@ const INJECTION_PATTERNS = [
 export function validateBusinessId(raw) {
   if (!raw) return null; // callers fall back to env default
   const id = String(raw).trim().toLowerCase();
-  if (!ALLOWED_BUSINESS_IDS.has(id)) {
-    throw new Error(`Invalid business_id "${id}". Allowed: ${[...ALLOWED_BUSINESS_IDS].join(', ')}`);
-  }
-  return id;
+  if (ALLOWED_BUSINESS_IDS.has(id)) return id;
+  // QBO realm IDs are numeric strings (9–25 digits). loadBusiness() validates against DB.
+  if (/^\d{9,25}$/.test(raw.trim())) return raw.trim();
+  throw new Error(`Invalid business_id "${id}". Expected a fixture name or a QuickBooks realm ID.`);
 }
 
 export function validateQuestion(raw) {
