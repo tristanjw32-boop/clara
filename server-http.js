@@ -3,7 +3,7 @@
  * Clara MCP — HTTP transport (remote agents: Hermes, Claude Desktop, etc.)
  * Exposes the same 6 tools as server.js but over HTTP/SSE instead of stdio.
  *
- * Endpoint: POST/GET/DELETE https://clara.aerosensei.com/mcp
+ * Endpoint: POST/GET/DELETE https://vigilcfo.com/mcp
  * Auth:     Authorization: Bearer <CLARA_API_KEY>
  */
 import { createHmac } from 'crypto';
@@ -216,8 +216,8 @@ function createMcpServer(defaultBusinessId = null) {
         return { content: [{ type: 'text', text: JSON.stringify({
           api_key: pickup.raw_key,
           realm_id: pickup.realm_id,
-          hermes_config: `mcp_servers:\n  clara:\n    url: https://clara.aerosensei.com/mcp\n    headers:\n      Authorization: "Bearer ${pickup.raw_key}"`,
-          claude_desktop_config: JSON.stringify({ mcpServers: { clara: { url: 'https://clara.aerosensei.com/mcp', headers: { Authorization: `Bearer ${pickup.raw_key}` } } } }, null, 2),
+          hermes_config: `mcp_servers:\n  vigil:\n    url: https://vigilcfo.com/mcp\n    headers:\n      Authorization: "Bearer ${pickup.raw_key}"`,
+          claude_desktop_config: JSON.stringify({ mcpServers: { vigil: { url: 'https://vigilcfo.com/mcp', headers: { Authorization: `Bearer ${pickup.raw_key}` } } } }, null, 2),
           note: 'Save this key — it cannot be retrieved again. Reconfigure your MCP client with it, then call any Vigil tool normally.',
         }) }] };
       }
@@ -228,7 +228,7 @@ function createMcpServer(defaultBusinessId = null) {
           // Generate a pickup token so MCP callers can claim their key after QBO connect
           // without manual copy-paste from the browser.
           const pickupToken = await createPickupToken();
-          result.next_step.connect_url = `https://clara.aerosensei.com/connect?pickup=${pickupToken}`;
+          result.next_step.connect_url = `https://vigilcfo.com/connect?pickup=${pickupToken}`;
           result.next_step.pickup_token = pickupToken;
           result.next_step.pickup_instructions =
             'After opening connect_url and completing QuickBooks authorisation, call claim_api_key with this pickup_token to retrieve your personal API key. The token is valid for 1 hour.';
@@ -318,9 +318,9 @@ app.use((_req, res, next) => {
   next();
 });
 
-// CORS — MCP clients and clara.aerosensei.com only
+// CORS — MCP clients and vigilcfo.com only
 app.use((req, res, next) => {
-  const allowed = ['https://clara.aerosensei.com'];
+  const allowed = ['https://vigilcfo.com', 'https://www.vigilcfo.com'];
   const origin = req.headers.origin;
   if (origin && allowed.includes(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
@@ -383,7 +383,7 @@ app.get('/admin/logs', (req, res) => {
 
 app.get('/robots.txt', (_req, res) => {
   res.setHeader('Content-Type', 'text/plain');
-  res.send('User-agent: *\nAllow: /\nDisallow: /mcp\nDisallow: /demo/run\nSitemap: https://clara.aerosensei.com/sitemap.xml\n');
+  res.send('User-agent: *\nAllow: /\nDisallow: /mcp\nDisallow: /demo/run\nSitemap: https://vigilcfo.com/sitemap.xml\n');
 });
 
 app.get('/sitemap.xml', (_req, res) => {
@@ -391,12 +391,12 @@ app.get('/sitemap.xml', (_req, res) => {
   res.setHeader('Content-Type', 'application/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url><loc>https://clara.aerosensei.com/</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
-  <url><loc>https://clara.aerosensei.com/demo</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://clara.aerosensei.com/connect</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
-  <url><loc>https://clara.aerosensei.com/pricing</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
-  <url><loc>https://clara.aerosensei.com/privacy</loc><lastmod>${now}</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
-  <url><loc>https://clara.aerosensei.com/terms</loc><lastmod>${now}</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://vigilcfo.com/</loc><lastmod>${now}</lastmod><changefreq>weekly</changefreq><priority>1.0</priority></url>
+  <url><loc>https://vigilcfo.com/demo</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://vigilcfo.com/connect</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://vigilcfo.com/pricing</loc><lastmod>${now}</lastmod><changefreq>monthly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://vigilcfo.com/privacy</loc><lastmod>${now}</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://vigilcfo.com/terms</loc><lastmod>${now}</lastmod><changefreq>yearly</changefreq><priority>0.3</priority></url>
 </urlset>`);
 });
 
@@ -447,7 +447,7 @@ app.get('/connect', (req, res) => {
       client_id:     process.env.QUICKBOOKS_CLIENT_ID,
       response_type: 'code',
       scope:         'com.intuit.quickbooks.accounting',
-      redirect_uri:  process.env.QUICKBOOKS_REDIRECT_URI || 'https://clara.aerosensei.com/auth/quickbooks/callback',
+      redirect_uri:  process.env.QUICKBOOKS_REDIRECT_URI || 'https://vigilcfo.com/auth/quickbooks/callback',
       state,
     });
     qbAuthUrl = `https://appcenter.intuit.com/connect/oauth2?${params}`;
@@ -476,7 +476,7 @@ app.get('/auth/quickbooks/callback', async (req, res) => {
       body: new URLSearchParams({
         grant_type:   'authorization_code',
         code,
-        redirect_uri: process.env.QUICKBOOKS_REDIRECT_URI || 'https://clara.aerosensei.com/auth/quickbooks/callback',
+        redirect_uri: process.env.QUICKBOOKS_REDIRECT_URI || 'https://vigilcfo.com/auth/quickbooks/callback',
       }),
     });
     if (!tokenRes.ok) {
@@ -580,9 +580,9 @@ app.get('/auth/quickbooks/callback', async (req, res) => {
         `<code>${userKey}</code>\n\n` +
         `⚠️ <b>Save this — it won't be shown again.</b>\n\n` +
         `<b>Add to Claude Desktop</b> (<code>claude_desktop_config.json</code>):\n` +
-        `<pre>{\n  "mcpServers": {\n    "vigil": {\n      "url": "https://clara.aerosensei.com/mcp",\n      "headers": {\n        "Authorization": "Bearer ${userKey}"\n      }\n    }\n  }\n}</pre>\n\n` +
+        `<pre>{\n  "mcpServers": {\n    "vigil": {\n      "url": "https://vigilcfo.com/mcp",\n      "headers": {\n        "Authorization": "Bearer ${userKey}"\n      }\n    }\n  }\n}</pre>\n\n` +
         `<b>Add to Hermes</b> (<code>~/.hermes/config.yaml</code>):\n` +
-        `<pre>mcp_servers:\n  vigil:\n    url: https://clara.aerosensei.com/mcp\n    headers:\n      Authorization: "Bearer ${userKey}"</pre>`;
+        `<pre>mcp_servers:\n  vigil:\n    url: https://vigilcfo.com/mcp\n    headers:\n      Authorization: "Bearer ${userKey}"</pre>`;
       await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -711,8 +711,8 @@ app.delete('/mcp', requireAuth, (_req, res) => res.status(200).send());
 
 app.listen(PORT, '127.0.0.1', async () => {
   console.log(`Vigil MCP HTTP server listening on 127.0.0.1:${PORT}`);
-  console.log(`Public endpoint: https://clara.aerosensei.com/mcp`);
-  console.log(`Health check:    https://clara.aerosensei.com/health`);
+  console.log(`Public endpoint: https://vigilcfo.com/mcp`);
+  console.log(`Health check:    https://vigilcfo.com/health`);
 
   // DB schema + file wiki migration (idempotent)
   try {

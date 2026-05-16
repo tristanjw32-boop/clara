@@ -539,24 +539,16 @@ export async function onboardClara({ owner_name, business_type, biggest_concern,
   };
 
   const insight = await claraAnalyze(
-    `You are onboarding ${name}, who runs a ${type} business. Their biggest concern is: "${concern}". Annual revenue is approximately ${revenue}.
+    `You are onboarding ${name}, who runs a ${type} business. Their biggest concern is: "${concern}".
 
-Using the representative financial data below (from a similar business), deliver their FIRST Vigil insight. This is the moment that either hooks them or loses them.
+Write a warm, brief welcome message (3–4 sentences max). Do NOT use any financial numbers — you don't have their real data yet.
 
-FORMAT — follow this structure exactly:
+1. Acknowledge their concern directly and by name — make them feel heard.
+2. Tell them in one sentence what Vigil will be able to show them once connected (cash timing, margin by client, overdue invoices — whatever fits their concern best).
+3. End with one encouraging line that frames connecting their accounting software as the obvious next step — something like "Thousands of ${type} owners have the same concern. Let's get your actual numbers in front of you."
 
-1. Open with one punchy sentence addressing ${name} by name. Name the single biggest problem you see in the data that connects to their concern. Be specific and slightly uncomfortable — say the thing they've been avoiding.
-
-2. Then a blank line, then 2-3 lines of key numbers — each as a bold label followed by the value, like: **Cash gap:** $2,600 short before payroll. No bullet points. Just the number and what it means.
-
-3. Then a blank line, then one sentence: the single most important thing they should do TODAY. Start with "**Today:**" (bold, exactly like that)
-
-4. Then a blank line, then one warm sentence that teases what Vigil will show them next. End with a specific question tied to the next button they'll tap — e.g. "Want to see your full cash forecast?"
-
-STOP after step 4. Do NOT add any disclaimer about representative data, do not mention connecting accounting software, do not say you'll check in tomorrow. The bot appends those automatically.
-
-Keep the total length short — this is a chat message, not a report. Warm, direct, human. No jargon. No filler phrases like "it's not complicated to fix."`,
-    context
+No fake data. No placeholders. No disclaimers. Sound like a trusted advisor who just met them, not a product demo.`,
+    null
   );
 
   return {
@@ -564,8 +556,8 @@ Keep the total length short — this is a chat message, not a report. Warm, dire
     business_id: fixtureId,
     next_step: {
       action: 'connect_accounting_software',
-      url: 'https://clara.aerosensei.com/connect',
-      message: `To see your actual numbers instead of this representative profile, connect your accounting software at https://clara.aerosensei.com/connect — takes about 2 minutes.`,
+      url: 'https://vigilcfo.com/connect',
+      message: `To see your actual numbers instead of this representative profile, connect your accounting software at https://vigilcfo.com/connect — takes about 2 minutes.`,
     },
     available_tools: [
       'get_financial_briefing — your daily financial pulse',

@@ -45,7 +45,7 @@ function signChatId(chatId) {
 
 function connectUrl(chatId) {
   const sig = signChatId(chatId);
-  return `https://clara.aerosensei.com/connect?tg=${chatId}.${sig}`;
+  return `https://vigilcfo.com/connect?tg=${chatId}.${sig}`;
 }
 
 export function invalidateSession(chatId) {
@@ -522,9 +522,9 @@ export async function handleUpdate(update, token) {
           `<code>${raw}</code>\n\n` +
           `⚠️ <b>Save this now — it won't be shown again.</b>${demoWarning}\n\n` +
           `<b>Connect to Claude Desktop</b> — add this to <code>claude_desktop_config.json</code>:\n\n` +
-          `<pre>{\n  "mcpServers": {\n    "vigil": {\n      "url": "https://clara.aerosensei.com/mcp",\n      "headers": {\n        "Authorization": "Bearer ${raw}"\n      }\n    }\n  }\n}</pre>\n\n` +
+          `<pre>{\n  "mcpServers": {\n    "vigil": {\n      "url": "https://vigilcfo.com/mcp",\n      "headers": {\n        "Authorization": "Bearer ${raw}"\n      }\n    }\n  }\n}</pre>\n\n` +
           `<b>Connect to Hermes</b> — add to <code>~/.hermes/config.yaml</code>:\n\n` +
-          `<pre>mcp_servers:\n  vigil:\n    url: https://clara.aerosensei.com/mcp\n    headers:\n      Authorization: "Bearer ${raw}"</pre>`
+          `<pre>mcp_servers:\n  vigil:\n    url: https://vigilcfo.com/mcp\n    headers:\n      Authorization: "Bearer ${raw}"</pre>`
         );
       } catch (err) {
         logChatEvent({ event: 'apikey_error', chatId, error: err.message });
@@ -704,12 +704,11 @@ export async function handleUpdate(update, token) {
       // Generate capability framework in background (cached per business type)
       setTimeout(() => getOrGenerateFramework(fields.business_type).catch(() => {}), 2000);
 
-      const intro   = fmt(result.welcome);
-      const footer  = `\n\n<i>This is based on a similar business — <a href="${connectUrl(chatId)}">connect your accounting software</a> to see your actual numbers.</i>`;
-      const checkin = `\n\n<i>I'll check in with you tomorrow. Type <b>mute</b> any time to turn that off.</i>`;
+      const intro  = fmt(result.welcome);
+      const cta    = `\n\n<a href="${connectUrl(chatId)}">Connect your QuickBooks →</a>\n<i>Takes about 30 seconds. Read-only — Vigil can never make changes.</i>`;
 
       scheduleFollowUp(token, chatId, fields.name);
-      return sendWithKeyboard(token, chatId, intro + footer + checkin);
+      return sendWithKeyboard(token, chatId, intro + cta);
     } catch (err) {
       logChatEvent({ event: 'tg_onboard_error', chatId, error: err.message });
       session.stage = 'onboarding_collecting';
@@ -730,7 +729,7 @@ export function webhookSecret() {
 }
 
 export async function registerWebhook(token) {
-  const url = `https://clara.aerosensei.com/telegram/webhook`;
+  const url = `https://vigilcfo.com/telegram/webhook`;
   const res = await tgPost(token, 'setWebhook', {
     url,
     allowed_updates: ['message', 'edited_message'],

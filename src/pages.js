@@ -1,4 +1,4 @@
-// HTML page templates for clara.aerosensei.com landing pages.
+// HTML page templates for vigilcfo.com landing pages.
 // Served by Express — no build step required.
 
 const FONTS = `<link rel="preconnect" href="https://fonts.googleapis.com">

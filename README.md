@@ -1,16 +1,16 @@
-# Clara — AI Financial Advisor for Small Business
+# Vigil — AI Financial Advisor for Small Business
 
-Clara is an AI CFO that watches your business finances around the clock, surfaces problems before they become crises, and gives specific, actionable advice — not generic dashboards.
+Vigil is an AI CFO that watches your business finances around the clock, surfaces problems before they become crises, and gives specific, actionable advice — not generic dashboards.
 
 She connects to QuickBooks Online and delivers intelligence through two channels:
 - **Telegram bot** — morning briefings, cash forecasts, AR alerts, value gaps, and free-form chat
 - **MCP server** — plugs into any MCP-compatible AI agent (Hermes, OpenClaw, Claude Desktop)
 
-Live at [clara.aerosensei.com](https://clara.aerosensei.com)
+Live at [vigilcfo.com](https://vigilcfo.com)
 
 ---
 
-## What Clara does
+## What Vigil does
 
 ### 6 tools
 
@@ -40,7 +40,7 @@ QuickBooks Online (sandbox or production)
         │  OAuth 2.0 (access + refresh tokens stored in Postgres)
         ▼
 ┌─────────────────────────────────────────┐
-│         clara-mcp  (port 3030)          │
+│         vigil-mcp  (port 3030)          │
 │                                         │
 │  src/adapters/quickbooks.js             │
 │   ├── Bank account balances (Account query)
@@ -57,7 +57,7 @@ QuickBooks Online (sandbox or production)
         │                    │
         ▼                    ▼
   MCP HTTP/SSE          Telegram Bot
-  (Hermes, OpenClaw,    (@ClaraCFO_bot)
+  (Hermes, OpenClaw,    (@Vigil_CFO_bot)
    Claude Desktop)
 ```
 
@@ -73,7 +73,7 @@ QuickBooks Online (sandbox or production)
 
 ### QBO data sources
 
-Clara uses the QBO Query API (not the Reports API) for reliability:
+Vigil uses the QBO Query API (not the Reports API) for reliability:
 
 | Data | QBO Query |
 |------|-----------|
@@ -85,17 +85,17 @@ Clara uses the QBO Query API (not the Reports API) for reliability:
 
 ---
 
-## Connecting to Clara
+## Connecting to Vigil
 
 ### Claude Desktop
 
 ```json
 {
   "mcpServers": {
-    "clara": {
-      "url": "https://clara.aerosensei.com/mcp",
+    "vigil": {
+      "url": "https://vigilcfo.com/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_CLARA_API_KEY"
+        "Authorization": "Bearer YOUR_VIGIL_API_KEY"
       }
     }
   }
@@ -106,10 +106,10 @@ Clara uses the QBO Query API (not the Reports API) for reliability:
 
 ```yaml
 mcp_servers:
-  clara:
-    url: https://clara.aerosensei.com/mcp
+  vigil:
+    url: https://vigilcfo.com/mcp
     headers:
-      Authorization: "Bearer YOUR_CLARA_API_KEY"
+      Authorization: "Bearer YOUR_VIGIL_API_KEY"
 ```
 
 ### OpenClaw
@@ -117,25 +117,25 @@ mcp_servers:
 ```json
 {
   "mcpServers": {
-    "clara": {
-      "url": "https://clara.aerosensei.com/mcp",
+    "vigil": {
+      "url": "https://vigilcfo.com/mcp",
       "headers": {
-        "Authorization": "Bearer YOUR_CLARA_API_KEY"
+        "Authorization": "Bearer YOUR_VIGIL_API_KEY"
       }
     }
   }
 }
 ```
 
-Get your API key at [clara.aerosensei.com/connect](https://clara.aerosensei.com/connect).
+Get your API key at [vigilcfo.com/connect](https://vigilcfo.com/connect).
 
 ---
 
 ## Telegram bot
 
-**Start**: message [@ClaraCFO_bot](https://t.me/ClaraCFO_bot) on Telegram.
+**Start**: message [@Vigil_CFO_bot](https://t.me/Vigil_CFO_bot) on Telegram.
 
-**Onboarding**: Clara asks your name, business type, and biggest financial concern. Takes 2 minutes.
+**Onboarding**: Vigil asks your name, business type, and biggest financial concern. Takes 2 minutes.
 
 **Keyboard buttons** (shown after every response):
 - 📊 Morning Briefing
@@ -148,7 +148,7 @@ Get your API key at [clara.aerosensei.com/connect](https://clara.aerosensei.com/
 - `/connect` — link your QuickBooks account
 - `/delete_my_data` — removes all stored data (sessions + wiki)
 
-**Wiki curator**: after 5 minutes of idle time, Clara synthesises the conversation into a structured memory (business profile, psychology, action tracker, conversation log). This context is injected into every subsequent interaction, making responses progressively more personalised.
+**Wiki curator**: after 5 minutes of idle time, Vigil synthesises the conversation into a structured memory (business profile, psychology, action tracker, conversation log). This context is injected into every subsequent interaction, making responses progressively more personalised.
 
 ---
 
@@ -157,11 +157,11 @@ Get your API key at [clara.aerosensei.com/connect](https://clara.aerosensei.com/
 ### Connecting
 
 1. In Telegram, send `/connect`
-2. Tap the link → authorise Clara in QuickBooks
-3. Clara sends "✅ QuickBooks connected!" in Telegram
+2. Tap the link → authorise Vigil in QuickBooks
+3. Vigil sends "✅ QuickBooks connected!" in Telegram
 4. All tool responses now use your real QBO data
 
-### What Clara reads (read-only scope)
+### What Vigil reads (read-only scope)
 
 - Bank account balances
 - Open and historical invoices (AR)
@@ -169,7 +169,7 @@ Get your API key at [clara.aerosensei.com/connect](https://clara.aerosensei.com/
 - Profit & Loss (30-day, 90-day, prior year)
 - Invoice line items (for service rate analysis)
 
-Clara does **not** write to QuickBooks.
+Vigil does **not** write to QuickBooks.
 
 ### Token management
 
@@ -198,7 +198,7 @@ These are in `src/adapters/quickbooks.js:SERVICE_BENCHMARKS`. Update them per ma
 ## Local development
 
 ```bash
-cp .env.example .env   # fill in ANTHROPIC_API_KEY, CLARA_API_KEY, DATABASE_URL
+cp .env.example .env   # fill in ANTHROPIC_API_KEY, VIGIL_API_KEY, DATABASE_URL
                         # QUICKBOOKS_CLIENT_ID, QUICKBOOKS_CLIENT_SECRET, TELEGRAM_BOT_TOKEN
 npm install
 node server-http.js    # HTTP server on localhost:3030
@@ -215,12 +215,12 @@ node test.js peak-fitness identify_value_gaps
 
 Health check:
 ```bash
-curl https://clara.aerosensei.com/health
+curl https://vigilcfo.com/health
 ```
 
 Admin event log (key-protected):
 ```bash
-curl "https://clara.aerosensei.com/admin/logs?key=YOUR_CLARA_API_KEY"
+curl "https://vigilcfo.com/admin/logs?key=YOUR_VIGIL_API_KEY"
 ```
 
 ---
@@ -271,4 +271,4 @@ curl "https://clara.aerosensei.com/admin/logs?key=YOUR_CLARA_API_KEY"
 
 ---
 
-*Built by [Well Drilled Inc.](https://welldrilled.ai) · [clara.aerosensei.com](https://clara.aerosensei.com)*
+*Built by [Well Drilled Inc.](https://welldrilled.ai) · [vigilcfo.com](https://vigilcfo.com)*

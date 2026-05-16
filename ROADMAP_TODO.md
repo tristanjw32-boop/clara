@@ -1,4 +1,4 @@
-# Clara — Roadmap & Open TODO
+# Vigil — Roadmap & Open TODO
 
 ---
 
@@ -11,7 +11,7 @@
 - [ ] **Register QuickBooks developer app** at developer.intuit.com
   - App name: Clara by Well Drilled
   - Scopes: `com.intuit.quickbooks.accounting` (read-only)
-  - Redirect URI: `https://clara.aerosensei.com/auth/quickbooks/callback`
+  - Redirect URI: `https://vigilcfo.com/auth/quickbooks/callback`
   - Copy `QUICKBOOKS_CLIENT_ID` + `QUICKBOOKS_CLIENT_SECRET` → `/opt/clara/.env`
 
 ### Ready to build (once credentials above are in .env)
@@ -44,7 +44,7 @@
 
 - [ ] 12-month inactivity expiry cron (drop wikis not updated in 12 months)
 
-- [ ] Privacy policy page at `clara.aerosensei.com/privacy`
+- [ ] Privacy policy page at `vigilcfo.com/privacy`
 
 ---
 
@@ -112,7 +112,7 @@
 
 ## Infrastructure & Compliance (ongoing)
 
-- [ ] GitHub repo for Clara (`.gitignore` already in place)
+- [x] GitHub repo for Vigil (`.gitignore` already in place, repo live under tristanjw32-boop/clara)
 - [ ] Rate limiting on `/telegram/webhook` endpoint (currently unprotected)
 - [ ] Cloudflare rate limiting audit for `/demo/run`
 - [ ] Privacy policy (required before real user data is stored)
