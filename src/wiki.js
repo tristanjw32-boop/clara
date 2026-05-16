@@ -20,78 +20,78 @@ export const TEMPLATES = {
   'conversation_log.md': `# Conversation Log\n\n_Append-only. Newest entry first._\n\n`,
 };
 
-// ── Core I/O ──────────────────────────────────────────────────────────────────
+// ── Core I/O — keyed by business_id so all channels share one wiki ────────────
 
-async function getWikiRow(chatId) {
+async function getWikiRow(businessId) {
   const { rows } = await query(
-    'SELECT pages FROM customer_wikis WHERE chat_id = $1',
-    [chatId]
+    'SELECT pages FROM business_wikis WHERE business_id = $1',
+    [String(businessId)]
   );
   return rows[0]?.pages || null;
 }
 
-async function ensureWikiRow(chatId) {
-  const existing = await getWikiRow(chatId);
+async function ensureWikiRow(businessId) {
+  const existing = await getWikiRow(businessId);
   if (existing) return existing;
   const pages = Object.fromEntries(
     Object.entries(TEMPLATES).map(([k, v]) => [k, v])
   );
   await query(
-    `INSERT INTO customer_wikis (chat_id, pages) VALUES ($1, $2)
-     ON CONFLICT (chat_id) DO NOTHING`,
-    [chatId, JSON.stringify(pages)]
+    `INSERT INTO business_wikis (business_id, pages) VALUES ($1, $2)
+     ON CONFLICT (business_id) DO NOTHING`,
+    [String(businessId), JSON.stringify(pages)]
   );
   return pages;
 }
 
-export async function readPage(chatId, filename) {
-  const pages = await getWikiRow(chatId);
+export async function readPage(businessId, filename) {
+  const pages = await getWikiRow(businessId);
   return pages?.[filename] || null;
 }
 
-export async function writePage(chatId, filename, content) {
+export async function writePage(businessId, filename, content) {
   await query(
-    `INSERT INTO customer_wikis (chat_id, pages, updated_at)
+    `INSERT INTO business_wikis (business_id, pages, updated_at)
      VALUES ($1, jsonb_build_object($2::text, $3::text), NOW())
-     ON CONFLICT (chat_id) DO UPDATE SET
-       pages      = customer_wikis.pages || jsonb_build_object($2::text, $3::text),
+     ON CONFLICT (business_id) DO UPDATE SET
+       pages      = business_wikis.pages || jsonb_build_object($2::text, $3::text),
        updated_at = NOW()`,
-    [chatId, filename, content]
+    [String(businessId), filename, content]
   );
 }
 
-export async function readAllPages(chatId) {
-  return (await getWikiRow(chatId)) || {};
+export async function readAllPages(businessId) {
+  return (await getWikiRow(businessId)) || {};
 }
 
-export async function readContextPages(chatId) {
-  const pages = await getWikiRow(chatId);
-  if (!pages) return {};
-  const keys = ['profile.md', 'psychology.md', 'ambitions.md', 'action_tracker.md'];
-  return Object.fromEntries(keys.filter(k => pages[k]).map(k => [k, pages[k]]));
-}
-
-export async function appendConversationLog(chatId, summary) {
-  const current = (await readPage(chatId, 'conversation_log.md')) || TEMPLATES['conversation_log.md'];
+export async function appendConversationLog(businessId, summary) {
+  const current = (await readPage(businessId, 'conversation_log.md')) || TEMPLATES['conversation_log.md'];
   const date = new Date().toISOString().slice(0, 16).replace('T', ' ');
   const entry = `\n---\n\n### ${date}\n\n${summary}\n`;
   const headerEnd = current.indexOf('_Append-only') + current.slice(current.indexOf('_Append-only')).indexOf('\n\n') + 2;
   const updated = current.slice(0, headerEnd) + entry + current.slice(headerEnd);
-  await writePage(chatId, 'conversation_log.md', updated);
+  await writePage(businessId, 'conversation_log.md', updated);
 }
 
-export async function seedWiki(chatId, { ownerName, businessType, concern, businessId }) {
-  await ensureWikiRow(chatId);
-  await writePage(chatId, 'profile.md', `# Profile\n\n## Identity\nName: ${ownerName}\n\n## Communication Style\n_Not yet known — observe over coming conversations_\n\n## Background\n_Not yet known_\n`);
-  await writePage(chatId, 'business.md', `# Business\n\n## Type & Stage\n${businessType}\n\n## Size & Geography\n_Not yet known_\n\n## Products & Services\n_Not yet known_\n\n## Key Metrics\nMatched financial profile: ${businessId}\n`);
-  await writePage(chatId, 'psychology.md', `# Psychology\n\n## Stated Anxieties\n- ${concern}\n\n## Recurring Worries\n_Watch for patterns across conversations_\n\n## Avoidance Patterns\n_Not yet known_\n\n## Risk Tolerance\n_Not yet known_\n\n## Emotional Tone\n_Not yet known_\n`);
+export async function seedWiki(businessId, { ownerName, businessType, concern }) {
+  await ensureWikiRow(businessId);
+  await writePage(businessId, 'profile.md', `# Profile\n\n## Identity\nName: ${ownerName}\n\n## Communication Style\n_Not yet known — observe over coming conversations_\n\n## Background\n_Not yet known_\n`);
+  await writePage(businessId, 'business.md', `# Business\n\n## Type & Stage\n${businessType}\n\n## Size & Geography\n_Not yet known_\n\n## Products & Services\n_Not yet known_\n\n## Key Metrics\nLinked business profile: ${businessId}\n`);
+  await writePage(businessId, 'psychology.md', `# Psychology\n\n## Stated Anxieties\n- ${concern}\n\n## Recurring Worries\n_Watch for patterns across conversations_\n\n## Avoidance Patterns\n_Not yet known_\n\n## Risk Tolerance\n_Not yet known_\n\n## Emotional Tone\n_Not yet known_\n`);
 }
 
-export async function deleteWiki(chatId) {
-  await query('DELETE FROM customer_wikis WHERE chat_id = $1', [chatId]);
+export async function deleteWiki(businessId) {
+  await query('DELETE FROM business_wikis WHERE business_id = $1', [String(businessId)]);
 }
 
 // ── Helpers used by curator ───────────────────────────────────────────────────
+
+export async function readContextPages(businessId) {
+  const pages = await getWikiRow(businessId);
+  if (!pages) return {};
+  const keys = ['profile.md', 'psychology.md', 'ambitions.md', 'action_tracker.md'];
+  return Object.fromEntries(keys.filter(k => pages[k]).map(k => [k, pages[k]]));
+}
 
 export function extractActionItems(responseText) {
   const match = responseText.match(/Key Action Items[\s\S]*?(?=\n\n\n|\n---|\n#|$)/i);

@@ -9,6 +9,8 @@ import { logChatEvent } from './events.js';
 import { seedWiki, deleteWiki } from './wiki.js';
 import { runCurator, buildWikiContext, runSnapshotCurator, updatePricingPage } from './curator.js';
 import { getSession as dbGetSession, saveSession, deleteSession } from './session-store.js';
+import { query } from './db.js';
+import { claraAnalyze } from './analysis.js';
 import {
   onboardClara,
   getFinancialBriefing,
@@ -17,7 +19,16 @@ import {
   getArAlerts,
   identifyValueGaps,
   askClara,
+  getActionDrafts,
+  getGrowthRoadmap,
+  getVigilScore,
 } from './tools.js';
+import { QUESTIONS, getQuestion, getNextQuestion, letterToKey, formatQuestion, allQuestionsAnswered } from './scoring/questions.js';
+import { saveAnswer, getAnsweredIds } from './scoring/store.js';
+import { getOrGenerateFramework } from './capabilities/generator.js';
+import { getAssessmentScores, mergeScores, saveScore } from './capabilities/scorer.js';
+import { shouldProbe, pickNextProbe, interpretAnswer } from './capabilities/probe.js';
+import { createKey, getKeysForChat, revokeKeysForChat } from './keys.js';
 import { validateQuestion } from './validate.js';
 
 // In-memory cache of session objects for the lifetime of a conversation.
@@ -41,11 +52,33 @@ export function invalidateSession(chatId) {
   sessionCache.delete(chatId);
 }
 
+// Called from server-http.js after QBO OAuth completes to kick off question flow
+export async function startVigilQuestions(token, chatId) {
+  const session = await getSession(chatId);
+  if (!session.businessId) return; // no business linked yet
+
+  const answeredIds = await getAnsweredIds(session.businessId);
+  const nextQ = getNextQuestion(answeredIds);
+  if (!nextQ) {
+    // All questions already answered — nothing to do
+    return;
+  }
+
+  session.stage = 'scoring_questions';
+  session.vigilQuestionId = nextQ.id;
+  await persistSession(session);
+
+  const intro = `Your books are connected — great. Before I give you your Vigil Score, I have ${QUESTIONS.length} quick questions. They take about 30 seconds total and make the score much more accurate.\n\n` + formatQuestion(nextQ);
+  await send(token, chatId, fmt(intro));
+  logChatEvent({ event: 'vigil_question_sent', chatId, questionId: nextQ.id });
+}
+
 const MAIN_KEYBOARD = {
   keyboard: [
     [{ text: '📊 Morning Briefing' }, { text: '💰 Cash Forecast' }],
     [{ text: '📈 Margin Analysis' }, { text: '📨 AR Alerts' }],
-    [{ text: '🎯 Value Gaps' }],
+    [{ text: '🎯 Value Gaps' }, { text: '⚡ Take Action' }],
+    [{ text: '🏆 Vigil Score' }, { text: '🗺️ Growth Roadmap' }],
   ],
   resize_keyboard: true,
   persistent: true,
@@ -146,7 +179,8 @@ function scheduleCurator(chatId) {
     if (!s || s.transcript.length === 0) return;
     const snapshot = [...s.transcript];
     s.transcript = [];
-    await runCurator(chatId, snapshot).catch(err =>
+    const businessId = s.businessId || String(chatId);
+    await runCurator(businessId, snapshot).catch(err =>
       logChatEvent({ event: 'curator_trigger_error', chatId, error: err.message })
     );
   }, CURATOR_IDLE_MS);
@@ -160,41 +194,156 @@ function scheduleFollowUp(token, chatId, ownerName) {
   const session = sessionCache.get(chatId);
   if (!session) return;
   if (session.followUpTimer) clearTimeout(session.followUpTimer);
+  // Persist the scheduled time so it can be rescheduled after a restart
+  const followUpAt = new Date(Date.now() + FOLLOW_UP_DELAY_MS).toISOString();
+  query(`UPDATE telegram_sessions SET follow_up_at = $1 WHERE chat_id = $2`, [followUpAt, chatId])
+    .catch(err => console.warn('Failed to persist follow_up_at:', err.message));
   session.followUpTimer = setTimeout(async () => {
     const s = sessionCache.get(chatId);
     if (!s || s.muted || s.stage !== 'active') return;
     try {
-      await send(token, chatId,
-        `Hey ${ownerName} 👋 — just checking in. How are things looking this week?\n\nTap <b>📊 Morning Briefing</b> for a fresh snapshot, or just ask me anything.`
-      );
+      // Read wiki to personalise the check-in rather than sending a generic message
+      const wikiContext = s.businessId ? await buildWikiContext(s.businessId) : null;
+      let message;
+      if (wikiContext) {
+        const result = await claraAnalyze(
+          `You are checking in with ${ownerName} after 24 hours of silence. Write one short, personal message (2–3 sentences max) that references something specific from what you know about them — a concern they mentioned, an action they committed to, or a number they were worried about. End with one simple question to draw them back in. Do not repeat advice. Do not list anything. Sound like a human checking in, not a bot.`,
+          null,
+          wikiContext
+        );
+        message = fmt(result);
+      } else {
+        message = `Hey ${ownerName} 👋 — just checking in. How are things looking this week?\n\nTap <b>📊 Morning Briefing</b> for a fresh snapshot, or just ask me anything.`;
+      }
+      await sendWithKeyboard(token, chatId, message);
+      // Clear the persisted timestamp so it isn't rescheduled on next restart
+      await query(`UPDATE telegram_sessions SET follow_up_at = NULL WHERE chat_id = $1`, [chatId])
+        .catch(() => {});
     } catch (_) {}
   }, FOLLOW_UP_DELAY_MS);
 }
 
+// Reschedule follow-ups for all active sessions on startup (survives server restarts)
+export async function rescheduleFollowUps(token) {
+  try {
+    const { rows } = await query(
+      `SELECT chat_id, owner_name, follow_up_at FROM telegram_sessions
+       WHERE stage = 'active' AND muted = FALSE
+         AND follow_up_at IS NOT NULL AND follow_up_at > NOW()`
+    );
+    for (const row of rows) {
+      const delay  = Math.max(0, new Date(row.follow_up_at) - Date.now());
+      const chatId = Number(row.chat_id);
+      const ownerName = row.owner_name || 'there';
+      const timer = setTimeout(async () => {
+        const s = sessionCache.get(chatId);
+        if (s?.muted || s?.stage !== 'active') return;
+        try {
+          await sendWithKeyboard(token, chatId,
+            `Hey ${ownerName} 👋 — just checking in. How are things looking?\n\nTap <b>📊 Morning Briefing</b> for a fresh snapshot.`
+          );
+        } catch (_) {}
+      }, delay);
+      const existing = sessionCache.get(chatId);
+      if (existing) existing.followUpTimer = timer;
+    }
+    if (rows.length > 0) console.log(`Rescheduled ${rows.length} follow-up(s) after startup`);
+  } catch (err) {
+    console.warn('rescheduleFollowUps failed (non-fatal):', err.message);
+  }
+}
+
 // ── Tool runners ─────────────────────────────────────────────────────────────
+
+async function runActionDrafts(token, chatId, businessId, ownerName) {
+  await sendTyping(token, chatId);
+  try {
+    const result = await getActionDrafts({ business_id: businessId, owner_name: ownerName, chat_id: chatId });
+
+    if (!result.drafts || result.drafts.length === 0) {
+      return sendWithKeyboard(token, chatId, result.message || "Nothing urgent to act on right now — things look healthy.");
+    }
+
+    // Intro message
+    const intro = `I've put together ${result.drafts.length} ready-to-send ${result.drafts.length === 1 ? 'message' : 'messages'} based on what I'm seeing in your numbers. Copy whichever ones you want to use — I haven't sent anything.\n`;
+    await send(token, chatId, fmt(intro));
+
+    // One message per draft so each is easy to copy
+    for (let i = 0; i < result.drafts.length; i++) {
+      const d = result.drafts[i];
+      const header = `<b>${i + 1}/${result.drafts.length} — ${d.title}</b>\n<b>To:</b> ${d.recipient}\n<b>Subject:</b> ${d.subject}\n`;
+      const body = `\n${d.body}`;
+      await send(token, chatId, header + body);
+    }
+
+    await sendWithKeyboard(token, chatId, 'Let me know if you want me to adjust the tone on any of those, or draft something else.');
+    logChatEvent({ event: 'action_drafts_sent', chatId, businessId, count: result.drafts.length });
+  } catch (err) {
+    logChatEvent({ event: 'action_drafts_error', chatId, businessId, error: err.message, stack: err.stack?.slice(0, 400) });
+    await sendWithKeyboard(token, chatId, 'Something went wrong drafting those — try again in a moment.');
+  }
+}
+
+async function maybeSendProbe(token, chatId, businessId, session) {
+  try {
+    if (!session.businessType) return;
+    const framework = await getOrGenerateFramework(session.businessType);
+    if (!framework) return;
+
+    // Load a stub of business data to get Layer 1 scores for merging
+    const { loadBusiness } = await import('./data.js');
+    const d = await loadBusiness(businessId);
+    const layer2Scores = await getAssessmentScores(businessId);
+    const merged = mergeScores(d.capability_scores || {}, layer2Scores, framework);
+
+    if (!shouldProbe(session, merged, framework)) return;
+
+    const cap = pickNextProbe(framework, merged);
+    if (!cap) return;
+
+    // Update session with the pending probe
+    const s = sessionCache.get(chatId);
+    if (!s || s.pendingProbe) return; // session changed or already probing
+    s.pendingProbe = { id: cap.id, name: cap.name, probe_question: cap.probe_question, rubric: cap.rubric };
+    s.lastProbeAt = new Date().toISOString();
+    await persistSession(s);
+
+    // Send the probe as a natural follow-up (small delay so it doesn't feel instant)
+    await send(token, chatId, `<i>One thing I've been meaning to ask — ${cap.probe_question}</i>`);
+    logChatEvent({ event: 'probe_sent', chatId, capability: cap.id });
+  } catch (err) {
+    logChatEvent({ event: 'probe_send_error', chatId, error: err.message });
+  }
+}
 
 async function runTool(token, chatId, businessId, toolFn, textKey) {
   await sendTyping(token, chatId);
   try {
     const session = sessionCache.get(chatId);
     const ownerName = session?.ownerName;
-    const wikiContext = await buildWikiContext(chatId);
+    const wikiContext = await buildWikiContext(businessId);
     const result = await toolFn({ business_id: businessId, owner_name: ownerName, wiki_context: wikiContext });
     const text = result[textKey] || JSON.stringify(result);
     const formatted = fmt(text);
     await sendWithKeyboard(token, chatId, formatted);
     if (session) logTurn(session, 'clara', text);
     scheduleCurator(chatId);
-    // Fire-and-forget post-call wiki updates
+    // Fire-and-forget post-call wiki updates keyed by businessId
     if (result.raw) {
-      setTimeout(() => runSnapshotCurator(chatId, textKey, result.raw), 0);
+      setTimeout(() => runSnapshotCurator(businessId, textKey, result.raw), 0);
     }
     if (textKey === 'analysis' && result.raw?.service_pricing_gaps?.length > 0) {
-      setTimeout(() => updatePricingPage(chatId, result.raw.service_pricing_gaps), 0);
+      setTimeout(() => updatePricingPage(businessId, result.raw.service_pricing_gaps), 0);
     }
   } catch (err) {
     logChatEvent({ event: 'run_tool_error', chatId, businessId, error: err.message, stack: err.stack?.slice(0, 400) });
-    await send(token, chatId, 'Something went wrong — try again in a moment.');
+    if (err.code === 'QBO_REFRESH_EXPIRED') {
+      await send(token, chatId,
+        `Your QuickBooks connection has expired — this happens after 100 days of inactivity.\n\nTap /reconnect to restore it. Takes about 30 seconds.`
+      );
+    } else {
+      await send(token, chatId, 'Something went wrong — try again in a moment.');
+    }
   }
 }
 
@@ -247,16 +396,23 @@ export async function handleUpdate(update, token) {
   // ── /delete_my_data ──
   if (text === '/delete_my_data') {
     await deleteSession(chatId);
-    await deleteWiki(chatId);
+    await deleteWiki(session?.businessId || String(chatId));
+    await revokeKeysForChat(chatId);
     sessionCache.delete(chatId);
-    return send(token, chatId, "Done — all your data has been deleted. Your conversation history, financial profile, and memory wiki have been removed. Send /start to begin again.");
+    return send(token, chatId, "Done — all your data has been deleted. Your conversation history, financial profile, memory wiki, and API keys have been removed. Send /start to begin again.");
   }
 
-  // ── /connect ──
-  if (text === '/connect') {
+  // ── /connect and /reconnect ──
+  if (text === '/connect' || text === '/reconnect') {
     const url = connectUrl(chatId);
+    const isReconnect = text === '/reconnect';
     return send(token, chatId,
-      `🔗 <b>Connect your QuickBooks</b>\n\nTap the link below to authorise Clara to read your accounting data. It takes about 30 seconds — Clara only reads, it can never make changes.\n\n<a href="${url}">Connect QuickBooks →</a>\n\n<i>Once connected, all your briefings will use your actual numbers instead of a demo business.</i>`
+      `🔗 <b>${isReconnect ? 'Reconnect your QuickBooks' : 'Connect your QuickBooks'}</b>\n\n` +
+      (isReconnect
+        ? `Tap the link to re-authorise Vigil. A new API key will be issued and your old one revoked automatically.\n\n`
+        : `Tap the link below to authorise Vigil to read your accounting data. It takes about 30 seconds — Vigil only reads, it can never make changes.\n\n`) +
+      `<a href="${url}">${isReconnect ? 'Reconnect QuickBooks →' : 'Connect QuickBooks →'}</a>\n\n` +
+      `<i>${isReconnect ? 'Your new API key will appear here in this chat.' : 'Once connected, all your briefings will use your actual numbers instead of a demo business.'}</i>`
     );
   }
 
@@ -267,7 +423,7 @@ export async function handleUpdate(update, token) {
     s.stage = 'onboarding_collecting';
     await persistSession(s);
     return send(token, chatId,
-      `👋 Hi, I'm <b>Clara</b> — your AI financial advisor.\n\nI help business owners understand their cash flow, margins, and clients before problems become crises.\n\nTell me a bit about yourself — your name, what kind of business you run, and what's keeping you up at night financially.`
+      `👋 Hi, I'm <b>Vigil</b> — your AI financial advisor.\n\nI help business owners understand their cash flow, margins, and clients before problems become crises.\n\nTell me a bit about yourself — your name, what kind of business you run, and what's keeping you up at night financially.`
     );
   }
 
@@ -300,19 +456,117 @@ export async function handleUpdate(update, token) {
     if (text === '/gaps'          || lc === '🎯 value gaps')
       return runTool(token, chatId, bid, identifyValueGaps, 'analysis');
 
-    // Free-text → ask_clara, with wiki context injected
+    if (text === '/actions'       || lc === '⚡ take action')
+      return runActionDrafts(token, chatId, bid, session.ownerName);
+
+    if (text === '/roadmap'       || lc === '🗺️ growth roadmap')
+      return runTool(token, chatId, bid,
+        (args) => getGrowthRoadmap({ ...args, business_type: session.businessType }),
+        'roadmap');
+
+    if (text === '/score'         || lc === '🏆 vigil score') {
+      await sendTyping(token, chatId);
+      try {
+        const answeredIds = await getAnsweredIds(bid);
+        const unanswered  = QUESTIONS.filter(q => !answeredIds.includes(q.id));
+        if (unanswered.length > 0) {
+          session.stage = 'scoring_questions';
+          session.vigilQuestionId = unanswered[0].id;
+          await persistSession(session);
+          await send(token, chatId, `Before I show your full Vigil Score, I need a few quick details.\n\n` + fmt(formatQuestion(unanswered[0])));
+          logChatEvent({ event: 'vigil_question_sent', chatId, questionId: unanswered[0].id });
+          return;
+        }
+        const result = await getVigilScore({ business_id: bid, owner_name: session.ownerName });
+        await sendWithKeyboard(token, chatId, fmt(result.summary));
+        logChatEvent({ event: 'vigil_score_sent', chatId, composite: result.composite });
+      } catch (err) {
+        logChatEvent({ event: 'vigil_score_error', chatId, error: err.message });
+        await sendWithKeyboard(token, chatId, 'Something went wrong — try again in a moment.');
+      }
+      return;
+    }
+
+    if (text === '/apikey') {
+      await sendTyping(token, chatId);
+      try {
+        // Check if they already have an active key
+        const existing = await getKeysForChat(chatId);
+        const active = existing.filter(k => !k.revoked_at);
+
+        if (active.length > 0) {
+          const k = active[0];
+          const lastUsed = k.last_used_at
+            ? `Last used ${new Date(k.last_used_at).toLocaleDateString()}`
+            : 'Never used';
+          return send(token, chatId,
+            `You already have an active API key (<code>${k.key_prefix}…</code> — ${lastUsed}).\n\n` +
+            `The full key was shown once when you generated it — it can't be retrieved.\n\n` +
+            `If you've lost it, use /revokekey to revoke it and /apikey to generate a fresh one.`
+          );
+        }
+
+        // QBO realm IDs are numeric (9-25 digits); fixture IDs are not.
+        const isRealData = /^\d{9,25}$/.test(session.businessId || '');
+
+        // Generate a fresh key
+        const ownerLabel = `Telegram: ${session.ownerName || chatId}`;
+        const { raw, prefix } = await createKey({ ownerLabel, chatId, realmId: session.businessId });
+        logChatEvent({ event: 'api_key_generated', chatId, prefix, isRealData });
+
+        const demoWarning = isRealData ? '' :
+          `\n\n⚠️ <b>Demo data:</b> Your QuickBooks isn't connected yet, so this key uses a sample business. <a href="${connectUrl(chatId)}">Connect QuickBooks</a> — a fresh key with your real data will be issued automatically and this one will be revoked.`;
+
+        return send(token, chatId,
+          `Here's your Vigil API key, ${session.ownerName || 'there'}:\n\n` +
+          `<code>${raw}</code>\n\n` +
+          `⚠️ <b>Save this now — it won't be shown again.</b>${demoWarning}\n\n` +
+          `<b>Connect to Claude Desktop</b> — add this to <code>claude_desktop_config.json</code>:\n\n` +
+          `<pre>{\n  "mcpServers": {\n    "vigil": {\n      "url": "https://clara.aerosensei.com/mcp",\n      "headers": {\n        "Authorization": "Bearer ${raw}"\n      }\n    }\n  }\n}</pre>\n\n` +
+          `<b>Connect to Hermes</b> — add to <code>~/.hermes/config.yaml</code>:\n\n` +
+          `<pre>mcp_servers:\n  vigil:\n    url: https://clara.aerosensei.com/mcp\n    headers:\n      Authorization: "Bearer ${raw}"</pre>`
+        );
+      } catch (err) {
+        logChatEvent({ event: 'apikey_error', chatId, error: err.message });
+        return send(token, chatId, 'Something went wrong generating your key — try again in a moment.');
+      }
+    }
+
+    if (text === '/revokekey') {
+      await revokeKeysForChat(chatId);
+      logChatEvent({ event: 'api_key_revoked', chatId });
+      return send(token, chatId, 'Done — your previous API key has been revoked. Use /apikey to generate a new one.');
+    }
+
+    // Free-text → ask_clara (with capability probing)
     await sendTyping(token, chatId);
     try {
+      // If there's a pending probe, interpret the answer before responding
+      if (session.pendingProbe) {
+        const probe = session.pendingProbe;
+        try {
+          const { score, reasoning } = await interpretAnswer(probe, text, session.businessType);
+          await saveScore(bid, probe.id, score, reasoning);
+          session.pendingProbe = null;
+          logChatEvent({ event: 'probe_scored', chatId, capability: probe.id, score });
+        } catch (err) {
+          logChatEvent({ event: 'probe_score_error', chatId, error: err.message });
+          session.pendingProbe = null;
+        }
+        await persistSession(session);
+      }
+
       const safeQ = validateQuestion(text);
-      const wikiContext = await buildWikiContext(chatId);
-      const questionWithContext = wikiContext
-        ? `${safeQ}\n\n---\n${wikiContext}`
-        : safeQ;
-      const result = await askClara({ business_id: bid, question: questionWithContext, owner_name: session.ownerName });
+      const wikiContext = await buildWikiContext(bid);
+      const result = await askClara({ business_id: bid, question: safeQ, owner_name: session.ownerName, wiki_context: wikiContext });
       const formatted = fmt(result.answer);
       await sendWithKeyboard(token, chatId, formatted);
       logTurn(session, 'clara', result.answer);
       scheduleCurator(chatId);
+
+      // Check if we should ask a capability probe question next
+      // Runs async after response is sent — doesn't block
+      setTimeout(() => maybeSendProbe(token, chatId, bid, session), 500);
     } catch (err) {
       logChatEvent({ event: 'ask_clara_error', chatId, error: err.message, stack: err.stack?.slice(0, 300) });
       if (err.message?.includes('disallowed')) {
@@ -323,12 +577,71 @@ export async function handleUpdate(update, token) {
     return;
   }
 
+  // ── Vigil scoring questions ──
+  if (session.stage === 'scoring_questions') {
+    const questionId = session.vigilQuestionId;
+    if (!questionId) {
+      // Shouldn't happen — recover by going active
+      session.stage = 'active';
+      await persistSession(session);
+      return sendWithKeyboard(token, chatId, 'All set — tap 📊 Morning Briefing for your first insight, or /score for your Vigil Score.');
+    }
+
+    const question = getQuestion(questionId);
+    if (!question) {
+      session.stage = 'active';
+      await persistSession(session);
+      return sendWithKeyboard(token, chatId, "All set — tap 📊 Morning Briefing or /score to see your Vigil Score.");
+    }
+
+    // Interpret the reply — accept letter (A/B/C...) or partial label text
+    const letter = text.trim().slice(0, 1).toUpperCase();
+    const key    = letterToKey(question, letter);
+
+    if (!key) {
+      const letters = 'ABCDEF'.slice(0, question.options.length).split('').join(', ');
+      return send(token, chatId, `Please reply with a letter (${letters}) to choose your answer.\n\n${fmt(formatQuestion(question))}`);
+    }
+
+    // Save answer and advance
+    const realmId = session.businessId;
+    await saveAnswer(realmId, questionId, key);
+    logChatEvent({ event: 'vigil_answer_saved', chatId, questionId, key });
+
+    const answeredIds = await getAnsweredIds(realmId);
+    const nextQ = getNextQuestion(answeredIds);
+
+    if (nextQ) {
+      session.vigilQuestionId = nextQ.id;
+      await persistSession(session);
+      await send(token, chatId, fmt(formatQuestion(nextQ)));
+      logChatEvent({ event: 'vigil_question_sent', chatId, questionId: nextQ.id });
+      return;
+    }
+
+    // All questions answered — compute score
+    session.stage = 'active';
+    session.vigilQuestionId = null;
+    await persistSession(session);
+
+    await sendTyping(token, chatId);
+    try {
+      const result = await getVigilScore({ business_id: realmId, owner_name: session.ownerName });
+      await sendWithKeyboard(token, chatId, fmt(result.summary));
+      logChatEvent({ event: 'vigil_score_sent', chatId, composite: result.composite });
+    } catch (err) {
+      logChatEvent({ event: 'vigil_score_error', chatId, error: err.message });
+      await sendWithKeyboard(token, chatId, "Your answers are saved. Type /score any time to see your Vigil Score.");
+    }
+    return;
+  }
+
   // ── Onboarding: show prompt on first message ──
   if (session.stage === 'welcome') {
     session.stage = 'onboarding_collecting';
     await persistSession(session);
     return send(token, chatId,
-      `👋 Hi, I'm <b>Clara</b> — your AI financial advisor.\n\nI help business owners understand their cash flow, margins, and clients before problems become crises.\n\nTell me a bit about yourself — your name, what kind of business you run, and what's keeping you up at night financially.`
+      `👋 Hi, I'm <b>Vigil</b> — your AI financial advisor.\n\nI help business owners understand their cash flow, margins, and clients before problems become crises.\n\nTell me a bit about yourself — your name, what kind of business you run, and what's keeping you up at night financially.`
     );
   }
 
@@ -375,18 +688,21 @@ export async function handleUpdate(update, token) {
         business_type:   fields.business_type,
         biggest_concern: fields.concern,
       });
-      session.businessId = result.business_id;
-      session.ownerName  = fields.name;
-      session.stage      = 'active';
+      session.businessId   = result.business_id;
+      session.ownerName    = fields.name;
+      session.businessType = fields.business_type;
+      session.stage        = 'active';
       await persistSession(session);
 
       // Seed the wiki with what we know
-      await seedWiki(chatId, {
+      await seedWiki(result.business_id, {
         ownerName:    fields.name,
         businessType: fields.business_type,
         concern:      fields.concern,
-        businessId:   result.business_id,
       });
+
+      // Generate capability framework in background (cached per business type)
+      setTimeout(() => getOrGenerateFramework(fields.business_type).catch(() => {}), 2000);
 
       const intro   = fmt(result.welcome);
       const footer  = `\n\n<i>This is based on a similar business — <a href="${connectUrl(chatId)}">connect your accounting software</a> to see your actual numbers.</i>`;
@@ -404,12 +720,22 @@ export async function handleUpdate(update, token) {
 
 // ── Webhook registration ─────────────────────────────────────────────────────
 
+// One-way derivation of the webhook secret from the master key so it doesn't need a separate env var.
+// Telegram requires the secret to be 1–256 chars, alphanumeric + underscore only.
+export function webhookSecret() {
+  return createHmac('sha256', process.env.CLARA_API_KEY || 'insecure')
+    .update('tg-webhook-secret')
+    .digest('hex')
+    .slice(0, 64);
+}
+
 export async function registerWebhook(token) {
   const url = `https://clara.aerosensei.com/telegram/webhook`;
   const res = await tgPost(token, 'setWebhook', {
     url,
     allowed_updates: ['message', 'edited_message'],
     drop_pending_updates: true,
+    secret_token: webhookSecret(),
   });
   if (res.ok) {
     console.log(`Telegram webhook registered: ${url}`);

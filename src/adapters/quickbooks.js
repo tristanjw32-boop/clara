@@ -52,7 +52,13 @@ async function refreshToken(token) {
     }),
   });
 
-  if (!res.ok) throw new Error(`QBO token refresh failed: ${res.status}`);
+  if (!res.ok) {
+    // 400 means the refresh token itself has expired (100-day limit).
+    // Throw a typed error so callers can detect this and prompt reconnection.
+    const err = new Error(`QBO token refresh failed: ${res.status}`);
+    if (res.status === 400) err.code = 'QBO_REFRESH_EXPIRED';
+    throw err;
+  }
   const data = await res.json();
 
   await query(

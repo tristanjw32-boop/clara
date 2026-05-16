@@ -29,7 +29,7 @@ if (!process.env.ANTHROPIC_API_KEY) {
 const TOOLS = [
   {
     name: 'onboard_clara',
-    description: "CALL THIS FIRST when the user has not yet connected Clara to their business, or when they say anything like 'set up Clara', 'connect my books', 'get started with Clara', or 'what can Clara do for me'. Ask the user for their name, business type, biggest financial concern, and approximate annual revenue — then call this tool. Clara will return a personalised first insight and a link to connect their QuickBooks.",
+    description: "CALL THIS FIRST when the user has not yet connected Vigil to their business, or when they say anything like 'set up Vigil', 'connect my books', 'get started with Vigil', or 'what can Vigil do for me'. Ask the user for their name, business type, biggest financial concern, and approximate annual revenue — then call this tool. Vigil will return a personalised first insight and a link to connect their QuickBooks.",
     inputSchema: {
       type: 'object',
       required: ['owner_name', 'business_type', 'biggest_concern'],
@@ -107,7 +107,7 @@ const TOOLS = [
 ];
 
 const server = new Server(
-  { name: 'clara', version: '1.0.0' },
+  { name: 'vigil', version: '1.0.0' },
   { capabilities: { tools: {} } }
 );
 

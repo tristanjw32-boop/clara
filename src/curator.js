@@ -1,5 +1,5 @@
 /**
- * Clara Customer Intelligence Curator
+ * Vigil Customer Intelligence Curator
  *
  * Runs after each conversation goes idle (5-min trigger from telegram.js).
  * Reads the conversation transcript, decides which wiki pages need updating,
@@ -24,7 +24,7 @@ function getClient() {
 
 // ── Curator system prompt ─────────────────────────────────────────────────────
 
-const CURATOR_SYSTEM = `You are the Clara Customer Intelligence Curator. You maintain a structured wiki about each business owner Clara advises.
+const CURATOR_SYSTEM = `You are the Vigil Customer Intelligence Curator. You maintain a structured wiki about each business owner Vigil advises.
 
 You receive a conversation transcript and the current content of a specific wiki page. Your job is to rewrite that page to incorporate everything new learned in the conversation.
 
@@ -43,38 +43,38 @@ Choose from: profile.md, business.md, financials.md, psychology.md, ambitions.md
 
 Rules:
 - conversation_log.md is ALWAYS updated — do not include it in the array (it's handled separately)
-- action_tracker.md should be included if Clara gave any "Key Action Items" OR the user mentioned completing or ignoring a previous action
+- action_tracker.md should be included if Vigil gave any "Key Action Items" OR the user mentioned completing or ignoring a previous action
 - Include a page only if the conversation contains genuinely new information for it
 - Return ONLY a valid JSON array of strings, e.g. ["profile.md","psychology.md"]`;
 
 // ── Curator entry point ───────────────────────────────────────────────────────
 
-export async function runCurator(chatId, transcript) {
+export async function runCurator(businessId, transcript) {
   if (!transcript || transcript.length === 0) return;
 
   const transcriptText = formatTranscript(transcript);
-  logChatEvent({ event: 'curator_start', chatId, turns: transcript.length });
+  logChatEvent({ event: 'curator_start', businessId, turns: transcript.length });
 
   try {
     // Step 1: triage — which pages need updating?
     const pagesToUpdate = await triagePages(transcriptText);
-    logChatEvent({ event: 'curator_triage', chatId, pages: pagesToUpdate });
+    logChatEvent({ event: 'curator_triage', businessId, pages: pagesToUpdate });
 
     // Step 2: update each flagged page in parallel
     await Promise.all(pagesToUpdate.map(filename =>
-      updatePage(chatId, filename, transcriptText)
+      updatePage(businessId, filename, transcriptText)
     ));
 
     // Step 3: always append a summary to the conversation log
     const summary = await buildLogSummary(transcriptText);
-    appendConversationLog(chatId, summary);
+    appendConversationLog(businessId, summary);
 
     // Step 4: extract and persist any new action items
-    await syncActionItems(chatId, transcript, transcriptText);
+    await syncActionItems(businessId, transcript, transcriptText);
 
-    logChatEvent({ event: 'curator_done', chatId, pagesUpdated: pagesToUpdate.length });
+    logChatEvent({ event: 'curator_done', businessId, pagesUpdated: pagesToUpdate.length });
   } catch (err) {
-    logChatEvent({ event: 'curator_error', chatId, error: err.message });
+    logChatEvent({ event: 'curator_error', businessId, error: err.message });
   }
 }
 
@@ -95,8 +95,8 @@ async function triagePages(transcriptText) {
 
 // ── Step 2: update individual page ───────────────────────────────────────────
 
-async function updatePage(chatId, filename, transcriptText) {
-  const current = readPage(chatId, filename) || '';
+async function updatePage(businessId, filename, transcriptText) {
+  const current = (await readPage(businessId, filename)) || '';
   const date = new Date().toISOString().slice(0, 10);
 
   const response = await getClient().messages.create({
@@ -123,7 +123,7 @@ Rewrite the page incorporating new information from the conversation.`,
 
   const updated = response.content[0].text.trim();
   if (updated && updated !== current.trim()) {
-    writePage(chatId, filename, updated + '\n');
+    await writePage(businessId, filename, updated + '\n');
   }
 }
 
@@ -133,7 +133,7 @@ async function buildLogSummary(transcriptText) {
   const response = await getClient().messages.create({
     model: 'claude-haiku-4-5-20251001',
     max_tokens: 256,
-    system: `Summarise a Clara conversation for a customer wiki log. Output 4-6 bullet points (use "-") covering: topics discussed, key numbers mentioned, emotional tone, anything the customer committed to or avoided. Be specific and factual. No preamble.`,
+    system: `Summarise a Vigil conversation for a customer wiki log. Output 4-6 bullet points (use "-") covering: topics discussed, key numbers mentioned, emotional tone, anything the customer committed to or avoided. Be specific and factual. No preamble.`,
     messages: [{ role: 'user', content: transcriptText }],
   });
   return response.content[0].text.trim();
@@ -141,8 +141,8 @@ async function buildLogSummary(transcriptText) {
 
 // ── Step 4: action item sync ──────────────────────────────────────────────────
 
-async function syncActionItems(chatId, transcript, transcriptText) {
-  // Extract new action items from Clara's tool responses in this conversation
+async function syncActionItems(businessId, transcript, transcriptText) {
+  // Extract new action items from Vigil's tool responses in this conversation
   const newActions = [];
   for (const turn of transcript) {
     if (turn.speaker === 'clara') {
@@ -152,7 +152,7 @@ async function syncActionItems(chatId, transcript, transcriptText) {
   }
   if (newActions.length === 0) return;
 
-  const current = readPage(chatId, 'action_tracker.md') || '';
+  const current = (await readPage(businessId, 'action_tracker.md')) || '';
   const date = new Date().toISOString().slice(0, 10);
 
   // Append new actions under "Open Actions" without duplicating
@@ -171,25 +171,25 @@ async function syncActionItems(chatId, transcript, transcriptText) {
     (_, existing) => `## Open Actions\n${existing.trim()}\n${newLines}\n`
   );
 
-  writePage(chatId, 'action_tracker.md', updated);
+  await writePage(businessId, 'action_tracker.md', updated);
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function formatTranscript(transcript) {
   return transcript
-    .map(t => `[${t.ts.slice(11, 16)}] ${t.speaker === 'user' ? 'Owner' : 'Clara'}: ${t.text}`)
+    .map(t => `[${t.ts.slice(11, 16)}] ${t.speaker === 'user' ? 'Owner' : 'Vigil'}: ${t.text}`)
     .join('\n');
 }
 
 // ── Snapshot curator (runs after each QBO tool call) ─────────────────────────
 
-export async function runSnapshotCurator(chatId, toolName, rawContext) {
-  if (!chatId || !rawContext) return;
+export async function runSnapshotCurator(businessId, toolName, rawContext) {
+  if (!businessId || !rawContext) return;
   const date = new Date().toISOString().slice(0, 10);
 
   try {
-    const current = (await readPage(chatId, 'financials.md')) || '';
+    const current = (await readPage(businessId, 'financials.md')) || '';
     const snapshot = {
       date,
       tool: toolName,
@@ -222,22 +222,22 @@ export async function runSnapshotCurator(chatId, toolName, rawContext) {
 
     const updated = response.content[0].text.trim();
     if (updated && updated !== current.trim()) {
-      await writePage(chatId, 'financials.md', updated + '\n');
-      logChatEvent({ event: 'snapshot_curator_done', chatId, tool: toolName });
+      await writePage(businessId, 'financials.md', updated + '\n');
+      logChatEvent({ event: 'snapshot_curator_done', businessId, tool: toolName });
     }
   } catch (err) {
-    logChatEvent({ event: 'snapshot_curator_error', chatId, error: err.message });
+    logChatEvent({ event: 'snapshot_curator_error', businessId, error: err.message });
   }
 }
 
 // ── Pricing page update (runs after identify_value_gaps) ──────────────────────
 
-export async function updatePricingPage(chatId, serviceGaps) {
-  if (!chatId || !serviceGaps || serviceGaps.length === 0) return;
+export async function updatePricingPage(businessId, serviceGaps) {
+  if (!businessId || !serviceGaps || serviceGaps.length === 0) return;
   const date = new Date().toISOString().slice(0, 10);
 
   try {
-    const current = (await readPage(chatId, 'pricing.md')) || '';
+    const current = (await readPage(businessId, 'pricing.md')) || '';
 
     const response = await getClient().messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -255,24 +255,24 @@ export async function updatePricingPage(chatId, serviceGaps) {
 
     const updated = response.content[0].text.trim();
     if (updated && updated !== current.trim()) {
-      await writePage(chatId, 'pricing.md', updated + '\n');
-      logChatEvent({ event: 'pricing_page_updated', chatId, services: serviceGaps.length });
+      await writePage(businessId, 'pricing.md', updated + '\n');
+      logChatEvent({ event: 'pricing_page_updated', businessId, services: serviceGaps.length });
     }
   } catch (err) {
-    logChatEvent({ event: 'pricing_page_error', chatId, error: err.message });
+    logChatEvent({ event: 'pricing_page_error', businessId, error: err.message });
   }
 }
 
 // ── Context builder (used by telegram.js before askClara) ─────────────────────
 
-export async function buildWikiContext(chatId) {
+export async function buildWikiContext(businessId) {
   const [profile, psychology, ambitions, actionTracker, financials, pricing] = await Promise.all([
-    readPage(chatId, 'profile.md'),
-    readPage(chatId, 'psychology.md'),
-    readPage(chatId, 'ambitions.md'),
-    readPage(chatId, 'action_tracker.md'),
-    readPage(chatId, 'financials.md'),
-    readPage(chatId, 'pricing.md'),
+    readPage(businessId, 'profile.md'),
+    readPage(businessId, 'psychology.md'),
+    readPage(businessId, 'ambitions.md'),
+    readPage(businessId, 'action_tracker.md'),
+    readPage(businessId, 'financials.md'),
+    readPage(businessId, 'pricing.md'),
   ]);
 
   const sections = [
@@ -288,5 +288,5 @@ export async function buildWikiContext(chatId) {
 
   if (sections.length === 0) return null;
 
-  return `## What Clara knows about this owner\n\n${sections.join('\n\n')}`;
+  return `## What Vigil knows about this owner\n\n${sections.join('\n\n')}`;
 }

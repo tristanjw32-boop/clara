@@ -1,4 +1,265 @@
-# Clara — Session Log & Next Steps
+# Clara/Vigil — Session Log & Next Steps
+
+---
+
+## Factual state as of 2026-05-15 (late evening — Phase 2a complete)
+
+### Phase 2a: Scoring engine — COMPLETE ✅
+
+**New files created:**
+- `src/scoring/benchmarks.js` — 6 industry codes (hvac/landscaping/pro_services/healthcare/construction/other), per-industry targets for gross margin, collection days, revenue/employee, concentration ceiling, recurring revenue %
+- `src/scoring/questions.js` — 6 letter-choice questions (industry type, employee count, pricing recency, recurring revenue %, collections process, payment terms). `formatQuestion()` renders A/B/C letter options for Telegram. `letterToKey()` parses the reply.
+- `src/scoring/brightSpots.js` — 8 peer stories, one per capability (Switch framework Elephant move)
+- `src/scoring/actions.js` — Scripted one-action library per capability per score level (1–4), concrete instruction per tier
+- `src/scoring/engine.js` — `computeVigilScore(qboData, answers)` → composite 1.0–5.0, 8 capability scores, dollar gaps, top action, bright spot. Weak caps get 1.5× composite weight. Top action = highest dollar gap.
+- `src/scoring/store.js` — `saveAnswer`, `loadAnswers`, `getAnsweredIds`, `saveScore`, `getLatestScore`, `hasRecentScore`
+
+**DB tables added (bootstrapSchema):**
+- `vigil_answers` — per-question answers keyed by (realm_id, question_id), UNIQUE constraint
+- `vigil_scores` — score snapshots (append-only), indexed by realm_id
+
+**Updated files:**
+- `src/db.js` — added both vigil tables to bootstrapSchema
+- `src/tools.js` — added `getVigilScore()` tool; imports scoring engine + store
+- `src/telegram.js` — added `startVigilQuestions()` export, `scoring_questions` stage handler, `/score` and `🏆 Vigil Score` button handlers; keyboard updated to include Vigil Score button
+- `server-http.js` — imports `startVigilQuestions` + `getVigilScore`; triggers question flow 3s after QBO OAuth callback; adds `get_vigil_score` to TOOLS array and switch case
+
+**Verified working:**
+- `computeVigilScore` produces correct 2.6/5 composite for summit-hvac fixture with hvac benchmarks
+- `getVigilScore` tool returns formatted output: stars rating, dollar gaps, top action + instruction, bright spot story
+- DB tables created on restart (confirmed via psql)
+- PM2 clara-mcp process restarts cleanly
+
+**Question flow UX:**
+1. QBO OAuth completes → `startVigilQuestions()` fires after 3s delay
+2. Session → `scoring_questions` stage, `vigilQuestionId` tracks current question
+3. Each reply: letter parsed → answer saved to DB → next question sent (or score computed)
+4. After all 6: `computeVigilScore` runs, score stored, summary sent, session → `active`
+5. `/score` or `🏆 Vigil Score` button works from `active` stage too (sends outstanding questions first if any)
+
+---
+
+## Factual state as of 2026-05-15 (evening — Phase 1b complete)
+
+### Phase 1b: Codebase rebrand Clara → Vigil — COMPLETE
+
+All user-visible "Clara" references in `src/pages.js` renamed to "Vigil". Internal identifiers preserved: `ask_clara` (JS function name), `.clara-card` (CSS class), `ClaraCFO_bot` (actual Telegram bot handle), `clara.aerosensei.com` (functional MCP endpoint URL — stays until domain is set up).
+
+**Pages updated (all titles, meta, body copy):**
+- Landing page: hero, briefing card, comparison card, capabilities section, developer section (YAML/JSON snippets now use `vigil:` key and `YOUR_VIGIL_API_KEY`)
+- JSON-LD: org/app names, canonical URLs, FAQ Q&A → all Vigil / vigilcfo.com
+- Connect page: title, lead copy, permissions label, disclaimer
+- Connected page: title, `hermesSnippet` key (`vigil:`), YAML config key, "Vigil is ready." H1, all body copy
+- Demo page: title, meta description, CSS `content` string, H1, "Ask Vigil" button, loading span, error string, result label
+- Privacy page: title, meta, `Applies to vigilcfo.com`, all §1–9 body copy
+- Terms page: title, meta, `Applies to vigilcfo.com`, all §1–12 body copy
+- Pricing page: title, meta description, sub-headline, feature list item
+
+**Syntax check:** `node --check src/pages.js` → OK
+**Restart:** `pm2 restart clara-mcp` → online
+**Live verification:** All 6 page titles confirmed via curl; landing page has 39 × "Vigil", 0 × "Clara"
+
+**Still named "Clara" intentionally:**
+- PM2 process: `clara-mcp` (id 171)
+- Service URL: `clara.aerosensei.com` — functional endpoint until vigilcfo.com is set up (Task 9, user action)
+- Telegram bot: `ClaraCFO_bot` — requires creating a new bot handle
+
+### Phase 1c complete — New landing page built on Switch psychological arc
+
+New `landingPage()` function replaces the old risk-briefing page entirely. Eight sections following the arc:
+
+1. **Recognition (Hero)**: "Find out what your business is actually worth." — names the gap without knowing the numbers
+2. **Possibility (Score)**: SVG radar chart, Summit HVAC 3.2/5.0 example, 8-capability breakdown with inline bar chart
+3. **Stakes (Dollar gap)**: Three gap cards ($31K pricing, $22K collections, $18K revenue mix) with exact dollar amounts
+4. **Action (Scripted move)**: Action card with specific instruction — raise service call rate from $95 to $110, with QuickBooks path + projected impact
+5. **Social proof (Bright spots)**: Two peer stories (plumbing Phoenix, landscaping Austin) — same size, same constraints, scored improvement
+6. **How it works**: 4-step process strip
+7. **Developer (MCP)**: Kept from old page — tabbed config for Hermes/OpenClaw/Claude Desktop
+8. **CTA**: "Your score is waiting." — free, read-only, no credit card
+
+SVG radar chart: 8-axis octagon, hand-calculated polygon points, dashed benchmark ring at 4.5/5, filled score polygon at 3.2/5, axis labels. viewBox 0 0 440 440, center (220,220), r=150.
+
+Verified live: 23 section matches in curl, all 8 eyebrow labels correct, page title updated.
+
+### Phase 1b complete → Phase 1c complete → Phase 2 next
+
+The current landing page is still the old Clara one (risk-sensing briefing theme). Phase 1c replaces it with Vigil's arc: Recognition → Possibility → Destination → Score → Action → Win → Identity.
+
+Key elements for Phase 1c landing page:
+- Hero: recognition hook ("You built a real business. You just don't know how it compares.")
+- Destination postcard: "What a 4.8/5 business looks like in your industry"
+- Vigil Score teaser: radar chart concept, 8 capabilities, 1-5 vs best-in-class
+- Bright spot proof: peer stories (same size, same constraints, already fixed the gap)
+- One scripted move: "One thing. This week. That changes the number."
+- Free beta CTA → connect books
+
+---
+
+---
+
+## Factual state as of 2026-05-15 (late afternoon)
+
+### Mobile optimization pass — complete
+
+All pages at clara.aerosensei.com are now mobile-friendly. Changes applied to `src/pages.js` (BASE_CSS + page-specific overrides):
+
+**Nav:** Reduced gap from 2rem to 1.5rem. Added `nav-secondary` class to "Try demo" link — hidden at ≤480px so only "Connect your books →" shows on phones. Prevents nav overflow on 375px screens.
+
+**Base font:** `@media (max-width: 480px) { html { font-size: 16px; } }` — scales the whole site proportionally on mobile (was 18px, felt oversized).
+
+**Config tabs (landing page dev section + connected page):** Added `overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;` + hidden scrollbar. Tabs now scroll horizontally instead of overflowing. Added `flex-shrink: 0` to prevent tab labels from squishing.
+
+**Landing page:** Added `@media (max-width: 480px)` block — reduces hero section top/bottom padding, briefing card inner padding (1.75rem 2rem → 1.25rem), and hero qualifier font-size.
+
+**Demo page:** Added `min-width: 0` to ask-input-row input (prevents flex overflow). Reduced tool-bar gap at 640px. Hides the selected company label at ≤440px (tool buttons still visible). Demo header bottom-padding reduced at 640px.
+
+All existing breakpoints (hero 760px, vs-grid 760px, how-inner 680px, step-grid 720px, demo grid 640/440px) were already correct — no regressions.
+
+---
+
+## Factual state as of 2026-05-15 (afternoon continuation)
+
+### MVP gap sprint — all P0s and P1s closed
+
+**Pages shipped:**
+- `/privacy` — full privacy policy: data collected, QBO read-only, SHA-256 key hashing, 90-day log retention, deletion via `/delete_my_data`, Anthropic data-processing disclosure
+- `/terms` — full TOS: beta disclaimer, not-financial-advice clause, acceptable use, limitation of liability, QBO read-only representation, $0 beta pricing
+- `/pricing` — $0/month beta card, full feature checklist, transition-notice commitment
+
+**Copy fixes:**
+- Landing page hero, comparison card, how-it-works step: Xero/Sage/Pastel now read "coming soon"
+- JSON-LD feature list updated to match
+- All three pages added to sitemap and footer nav
+
+**Demo verified:**
+- `/demo/run` endpoint confirmed live — clicking any company fires real Clara tools and renders AI output inline
+
+**Margin analysis fix (earlier this session):**
+- Root cause: QBO adapter returns `customers: []`, tool assumed non-empty. Fixed with dual-path logic: service-rate analysis for live QBO data, per-customer analysis for fixtures
+
+**Notion page updated:** `3611c4a2-6ee9-8199-b915-dc12692dded4` — all 8 completed items struck through, sprint tracking updated
+
+### Remaining open items
+
+| Priority | Item | Status |
+|----------|------|--------|
+| P2 | Mobile optimization pass | Not started |
+| P1 | Email delivery setup (Resend) | Not started |
+| P3 | GitHub repo + CI/CD | Not started |
+| P3 | Notification web config page | Not started |
+| P3 | Layer 1 financial scores → generated framework IDs mapping | Known gap |
+
+---
+
+## Factual state as of 2026-05-15 (end of session)
+
+### Phase A — Agentic execution shipped
+
+**New `⚡ Take Action` Telegram button** — Clara's sub-agents analyze live data and return ready-to-send copy-paste drafts.
+
+**Three sub-agents (`src/agents/`):**
+- `arCollector.js` — drafts AR follow-up emails for invoices >14 days overdue (top 3 by amount). Normalises `days_outstanding` ↔ `days_overdue` for fixture/QBO compatibility.
+- `priceAnalyst.js` — drafts a rate-increase notice for the most underpriced service (>10% below benchmark). Includes annual gain estimate.
+- `cashOptimizer.js` — drafts a vendor payment extension request for the largest urgent bill (due ≤14d, >$500). Skips non-negotiable obligations (payroll, tax, insurance, loan, mortgage).
+
+**Governance (`src/agents/index.js`):**
+- `GOVERNANCE` constant defines allowed action types, max drafts (5), no auto-send rule, must-cite-data rule
+- Every draft logged to `agent_actions` DB table (audit trail) with `chat_id`, `business_id`, `action_type`, `agent`, `context` (source data), `draft_text`, `created_at`, `viewed_at`
+
+**`agent_actions` DB table** — added to `bootstrapSchema()` in `db.js`. Migrated cleanly on restart.
+
+**Telegram UX:**
+- Intro message: "I've put together N ready-to-send messages based on what I'm seeing in your numbers. Nothing has been sent."
+- One message per draft: header (title / To / Subject) + body
+- Follow-up: "Let me know if you want me to adjust the tone on any of those"
+
+**Conversational tone fix (earlier this session):**
+- `CLARA_SYSTEM` updated with "Conversational intelligence" block — acknowledge social/emotional beats before pivoting to urgent data
+- `askClara` prompt reframed: "sent you this message — first read the tone"
+
+### Full phase roadmap
+
+| Phase | Name | Status |
+|-------|------|--------|
+| 0 | Intelligence Core | ✅ Done |
+| 1A | Real Data (QBO) | ✅ Done |
+| 1B | Conversational Intelligence | ✅ Done |
+| 2 | Agentic Execution | ✅ Done (this session) |
+| 3 | Capability Assessment | Next |
+| 4 | Team Clara | Later |
+| 5 | Connected Autonomy | Later |
+| 6 | Business OS | Future |
+
+### Phase 3 — Capability Assessment SHIPPED (this session)
+
+**What was built:**
+
+**DB tables added:**
+- `capability_frameworks` — AI-generated per business type, cached permanently
+- `capability_assessments` — per-business scored capabilities (source: layer1 or layer2)
+- `telegram_sessions` columns: `business_type`, `pending_probe JSONB`, `last_probe_at`
+
+**New files:**
+- `src/capabilities/generator.js` — `getOrGenerateFramework(type)`: calls Haiku once, stores in DB, reuses for all future businesses of same type. Generates 6 capabilities with rubrics (1-5), probe questions, AI use cases per business type.
+- `src/capabilities/scorer.js` — `mergeScores()`: combines Layer 1 financial + Layer 2 conversational scores. `prioritisedRoadmap()`: ranks by gap × impact_weight. `saveScore()`: persists Layer 2 scores.
+- `src/capabilities/probe.js` — `shouldProbe()`: checks cooldown (8h) + pendingProbe + unscored caps. `pickNextProbe()`: highest-impact unscored conversational cap. `interpretAnswer()`: Haiku scores 1-5 from owner's answer.
+
+**Telegram changes:**
+- `🗺️ Growth Roadmap` button added (row 4 of keyboard)
+- `businessType` stored in session during onboarding; framework generated in background (2s delay)
+- After each `askClara` response: `maybeSendProbe()` fires async — checks cooldown, picks next capability, sends `<i>One thing I've been meaning to ask — [question]</i>`
+- If `pendingProbe` is set when user sends a message: interprets their answer first (saves score), then answers their question normally
+- `session-store.js` updated to persist `businessType`, `pendingProbe`, `lastProbeAt`
+
+**Test results (acme-plumbing, plumbing type):**
+- Framework generated: 6 capabilities (Job Dispatch, Predictive Upsell, Tech Productivity, Pricing, Inventory, Customer Retention)
+- Growth Roadmap output: quantified, business-specific, professional — cites $8-15K/technician/year impact, 15-20% travel reduction, callback reduction rates
+- Probing confirmed working in unit test
+
+**Known follow-up needed:**
+- Layer 1 financial scores (ar_management, cash_management etc.) not yet mapping to generated framework IDs. Generator creates business-specific IDs. Fix: add a "standard financial capabilities" pass that always maps Layer 1 → framework, or have generator use standard IDs for financial caps.
+
+### Security audit completed (2026-05-15)
+
+Full checklist stored at `/opt/clara/VIBE_SECURITY_CHECKLIST.md`.
+
+**Fixed this session:**
+- ✅ MCP SDK upgraded 1.11.0 → 1.29.0 (3 CVEs resolved: ReDoS, cross-client data leak, DNS rebinding)
+- ✅ `/admin/logs` moved from `?key=` query param to `Authorization: Bearer` header
+- ✅ `/connected` API key now gated behind HMAC view token (10-min window) — anonymous visitors see placeholder
+- ✅ `err.message` no longer sent to clients — generic messages returned
+- ✅ Security headers added globally (X-Frame-Options, X-Content-Type-Options, X-XSS-Protection, Referrer-Policy, Permissions-Policy)
+- ✅ CORS policy added — only `clara.aerosensei.com` origin allowed
+- ✅ Rate limiting added: `/telegram/webhook` (120 req/min), `/demo/run` (20 req/min), global in-process limiter
+
+**Remaining open items (prioritised):**
+- [ ] **P1: GitHub repo + CI/CD** — no repo means no SAST, no dependency scanning, no PR review gate
+- [ ] **P1: Per-user API keys** — currently one shared `CLARA_API_KEY` for all MCP users; can't revoke individual integrations
+- [ ] **P1: Telegram webhook signature verification** — validate `X-Telegram-Bot-Api-Secret-Token` header on incoming webhook calls
+- [ ] **P2: Structured logging (pino/winston)** — currently console.log only; no searchable log store
+- [ ] **P2: Env var validation at startup** — crash clearly if required env vars are missing (currently partial)
+- [ ] **P2: Dedicated secrets manager** — move from .env file to Vault or cloud secrets manager at scale
+- [ ] **P2: Formal secret rotation schedule** — document and calendar
+- [ ] **BACKLOG: Admin page** — display VIBE_SECURITY_CHECKLIST.md as a live status page with pass/fail indicators; show audit trail from `agent_actions` table
+
+### Next: Phase 4 — Team Clara
+
+**What it involves:**
+- Universal SMB capability framework (6 domains, 5-8 capabilities per business type)
+- When a new business type joins → background agent generates: capability hierarchy, maturity rubrics (1-5), assessment questions
+- Rubrics stored in DB, reused for all future businesses of same type
+- Clara probes conversationally — 1 question per interaction over several days, never a survey
+- Scores combine: Layer 1 (financial data) + Layer 2 (conversational responses)
+- New `🗺️ Growth Roadmap` button: shows top 3 priority capabilities + specific AI use case for each
+
+**Key design decisions confirmed:**
+- Business-type-specific capability selection (not generic)
+- Conversational maturity recovery over days, not a form
+- Standardized framework + AI-generated specialization per type
+- Phase 4 = Team Clara (multiple specialist sub-agents, orchestrated)
+- Phase 5 = Gmail/QBO direct write with approval gates + governance dashboard
+
+
 
 ---
 

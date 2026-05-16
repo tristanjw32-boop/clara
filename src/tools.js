@@ -1,6 +1,11 @@
 import { loadBusiness, listBusinesses } from './data.js';
 import { claraAnalyze } from './analysis.js';
 import { validateBusinessId, validateQuestion, validateDays, validateShortString } from './validate.js';
+import { runAgents } from './agents/index.js';
+import { getOrGenerateFramework } from './capabilities/generator.js';
+import { getAssessmentScores, mergeScores, prioritisedRoadmap } from './capabilities/scorer.js';
+import { computeVigilScore, CAP_LABELS } from './scoring/engine.js';
+import { loadAnswers, saveScore, getLatestScore } from './scoring/store.js';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -132,49 +137,91 @@ export async function getCashForecast({ business_id, days, owner_name, wiki_cont
 
 export async function getMarginAnalysis({ business_id, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
-  const { business, customers, margin, industry_benchmarks } = d;
+  const { business, customers, margin, industry_benchmarks, service_rates } = d;
   if (owner_name) business.owner = owner_name;
 
-  const sorted = [...customers].sort((a, b) => b.revenue_90d - a.revenue_90d);
-  const totalRevenue = customers.reduce((s, c) => s + c.revenue_90d, 0);
-  const topTwoRevenuePct = ((sorted[0].revenue_90d + (sorted[1]?.revenue_90d || 0)) / totalRevenue * 100).toFixed(1);
-  const topTwoMarginPct = sorted[0] && sorted[1]
-    ? (((sorted[0].revenue_90d * sorted[0].margin_pct / 100) + (sorted[1].revenue_90d * sorted[1].margin_pct / 100)) / (sorted[0].revenue_90d + sorted[1].revenue_90d) * 100).toFixed(1)
-    : null;
+  const hasCustomers = Array.isArray(customers) && customers.length > 0;
+  const hasServiceRates = Array.isArray(service_rates) && service_rates.length > 0;
 
-  const unprofitable = customers.filter(c => c.margin_pct < 0);
-  const dragClients = customers.filter(c => c.margin_pct < margin.gross_pct_90d - 10);
+  let context;
+  let prompt;
 
-  const context = {
-    owner: business.owner,
-    business: business.name,
-    overall_gross_margin_30d: pct(margin.gross_pct_30d),
-    overall_gross_margin_prior_year: pct(margin.gross_pct_prior_year),
-    benchmark_gross_margin: pct(industry_benchmarks.gross_margin_pct),
-    gap_to_benchmark: pct(industry_benchmarks.gross_margin_pct - margin.gross_pct_30d),
-    customers: sorted.map(c => ({
-      name: c.name,
-      revenue_90d: fmt(c.revenue_90d),
-      revenue_share_pct: pct(c.revenue_90d / totalRevenue * 100),
-      margin_pct: pct(c.margin_pct),
-      profit_90d: fmt(c.revenue_90d * c.margin_pct / 100),
-    })),
-    top_two_revenue_pct: `${topTwoRevenuePct}%`,
-    top_two_margin_pct: topTwoMarginPct ? `${topTwoMarginPct}%` : null,
-    unprofitable_clients: unprofitable.map(c => c.name),
-    drag_clients: dragClients.map(c => ({ name: c.name, margin_pct: pct(c.margin_pct), notes: c.notes })),
-  };
+  if (hasCustomers) {
+    // Fixture path: full per-customer margin breakdown
+    const sorted = [...customers].sort((a, b) => b.revenue_90d - a.revenue_90d);
+    const totalRevenue = customers.reduce((s, c) => s + (c.revenue_90d || 0), 0);
+    const topTwo = sorted.slice(0, 2);
+    const topTwoRevenuePct = totalRevenue > 0
+      ? ((topTwo.reduce((s, c) => s + (c.revenue_90d || 0), 0) / totalRevenue) * 100).toFixed(1)
+      : '0.0';
+    const topTwoMarginPct = topTwo.length === 2
+      ? (((topTwo[0].revenue_90d * topTwo[0].margin_pct / 100) + (topTwo[1].revenue_90d * topTwo[1].margin_pct / 100)) / (topTwo[0].revenue_90d + topTwo[1].revenue_90d) * 100).toFixed(1)
+      : null;
+    const unprofitable = customers.filter(c => c.margin_pct < 0);
+    const dragClients  = customers.filter(c => c.margin_pct < (margin.gross_pct_90d || margin.gross_pct_30d) - 10);
 
-  const insight = await claraAnalyze(
-    `Analyse the customer margin breakdown for ${business.owner} at ${business.name}. One sentence naming the single most important margin finding. Then one line per key customer as a bold label followed by the numbers, like: **Grand Meridian:** 12% margin, $4,200 profit. Call out anyone unprofitable or dragging the average. No bullet points. End with "Key Action Items" and 2-3 numbered actions with specific numbers. Name names — no vague "one client" language.`,
-    context,
-    wiki_context
-  );
+    context = {
+      owner: business.owner,
+      business: business.name,
+      overall_gross_margin_30d: pct(margin.gross_pct_30d),
+      overall_gross_margin_prior_year: pct(margin.gross_pct_prior_year),
+      benchmark_gross_margin: pct(industry_benchmarks.gross_margin_pct),
+      gap_to_benchmark: pct(industry_benchmarks.gross_margin_pct - margin.gross_pct_30d),
+      customers: sorted.map(c => ({
+        name: c.name,
+        revenue_90d: fmt(c.revenue_90d),
+        revenue_share_pct: pct((c.revenue_90d || 0) / totalRevenue * 100),
+        margin_pct: pct(c.margin_pct),
+        profit_90d: fmt((c.revenue_90d || 0) * c.margin_pct / 100),
+      })),
+      top_two_revenue_pct: `${topTwoRevenuePct}%`,
+      top_two_margin_pct: topTwoMarginPct ? `${topTwoMarginPct}%` : null,
+      unprofitable_clients: unprofitable.map(c => c.name),
+      drag_clients: dragClients.map(c => ({ name: c.name, margin_pct: pct(c.margin_pct), notes: c.notes })),
+    };
+    prompt = `Analyse the customer margin breakdown for ${business.owner} at ${business.name}. One sentence naming the single most important margin finding. Then one line per key customer as a bold label followed by the numbers, like: **Grand Meridian:** 12% margin, $4,200 profit. Call out anyone unprofitable or dragging the average. No bullet points. End with "Key Action Items" and 2-3 numbered actions with specific numbers. Name names — no vague "one client" language.`;
+  } else {
+    // QBO live path: no per-customer data — use service-rate breakdown instead
+    const totalServiceRevenue = hasServiceRates
+      ? service_rates.reduce((s, r) => s + (r.total_revenue || 0), 0)
+      : 0;
+    const underpricedServices = hasServiceRates
+      ? service_rates.filter(r => r.gap_pct !== null && r.gap_pct > 10)
+      : [];
+    const annualGap = underpricedServices.reduce((s, r) => {
+      if (!r.benchmark_rate || !r.avg_rate || !r.job_count) return s;
+      return s + (r.benchmark_rate - r.avg_rate) * r.job_count * 4; // annualise from 90d
+    }, 0);
+
+    context = {
+      owner: business.owner,
+      business: business.name,
+      overall_gross_margin_30d: pct(margin.gross_pct_30d),
+      overall_gross_margin_prior_year: pct(margin.gross_pct_prior_year),
+      benchmark_gross_margin: pct(industry_benchmarks.gross_margin_pct),
+      gap_to_benchmark: pct(industry_benchmarks.gross_margin_pct - margin.gross_pct_30d),
+      service_breakdown: hasServiceRates ? service_rates.map(r => ({
+        service: r.service,
+        avg_rate: fmt(r.avg_rate),
+        total_revenue_90d: fmt(r.total_revenue),
+        job_count: r.job_count,
+        benchmark_rate: r.benchmark_rate ? fmt(r.benchmark_rate) : 'no benchmark',
+        gap_pct: r.gap_pct !== null ? `${r.gap_pct}% below market` : null,
+      })) : [],
+      total_service_revenue_90d: fmt(totalServiceRevenue),
+      underpriced_services: underpricedServices.map(r => r.service),
+      estimated_annual_pricing_gap: annualGap > 0 ? fmt(annualGap) : null,
+      note: 'Per-customer margin breakdown is not available for this account. Analysis is based on overall margin and service-level pricing data.',
+    };
+    prompt = `Analyse the margin picture for ${business.owner} at ${business.name} using their overall margin and service-rate data (per-customer breakdown not available). Open with one sentence on the most important margin finding. Then one line per service as a bold label: rate charged, benchmark rate if available, and what the gap means in dollars. No bullet points. End with "Key Action Items" and 2-3 numbered actions with specific dollar amounts where possible.`;
+  }
+
+  const insight = await claraAnalyze(prompt, context, wiki_context);
 
   return {
     business: business.name,
     overall_margin: { gross_30d: margin.gross_pct_30d, gross_prior_year: margin.gross_pct_prior_year, benchmark: industry_benchmarks.gross_margin_pct },
-    customers: sorted,
+    customers: hasCustomers ? customers : [],
     analysis: insight,
     raw: context,
   };
@@ -319,14 +366,14 @@ export async function getArAlerts({ business_id, owner_name, wiki_context = null
 
 // ── Tool: ask_clara ───────────────────────────────────────────────────────────
 
-export async function askClara({ business_id, question, owner_name }) {
+export async function askClara({ business_id, question, owner_name, wiki_context = null }) {
   const d = await loadBusiness(validateBusinessId(business_id));
   const { business } = d;
   if (owner_name) business.owner = owner_name;
 
   if (question === 'onboard') {
     return {
-      message: `To set up Clara for your business, please use the onboard_clara tool instead — it will ask you 3 quick questions and return a personalised first insight. Call onboard_clara with: owner_name, business_type, and biggest_concern.`,
+      message: `To set up Vigil for your business, please use the onboard_clara tool instead — it will ask you 3 quick questions and return a personalised first insight. Call onboard_clara with: owner_name, business_type, and biggest_concern.`,
     };
   }
 
@@ -347,11 +394,101 @@ export async function askClara({ business_id, question, owner_name }) {
   };
 
   const answer = await claraAnalyze(
-    `${business.owner} at ${business.name} has a question about their business finances. The question is: """${safeQuestion}"""\n\nAnswer using only the financial data provided. Be specific and quantified.`,
-    fullContext
+    `${business.owner} at ${business.name} sent you this message: """${safeQuestion}"""\n\nFirst, read the tone:\n- If it's an ACTION COMMITMENT ("I'm calling them now", "on it", "doing it", "will do") — respond with ONE short encouraging sentence and nothing else. No numbers, no new concerns.\n- If it's a thank-you or acknowledgement — open with a warm one-sentence reply, then weave in anything urgent very softly.\n- If it's a financial question — answer directly with specific numbers from the data.\nUse only the financial data provided.`,
+    fullContext,
+    wiki_context
   );
 
   return { business: business.name, question, answer };
+}
+
+// ── Tool: get_action_drafts ───────────────────────────────────────────────────
+
+export async function getActionDrafts({ business_id, owner_name, chat_id = null }) {
+  const d = await loadBusiness(validateBusinessId(business_id));
+  const { business } = d;
+  if (owner_name) business.owner = owner_name;
+
+  const drafts = await runAgents(d, owner_name, chat_id);
+
+  if (drafts.length === 0) {
+    return {
+      business: business.name,
+      drafts: [],
+      message: 'No actions needed right now — your AR, pricing, and cash position are all in good shape.',
+    };
+  }
+
+  return {
+    business: business.name,
+    draft_count: drafts.length,
+    drafts: drafts.map(({ agent, context, ...rest }) => rest), // strip internal fields from MCP response
+    governance_note: 'These are drafts only. Nothing has been sent. Review before copying.',
+  };
+}
+
+// ── Tool: get_growth_roadmap ──────────────────────────────────────────────────
+
+export async function getGrowthRoadmap({ business_id, business_type, owner_name, wiki_context = null }) {
+  const d = await loadBusiness(validateBusinessId(business_id));
+  const { business } = d;
+  if (owner_name) business.owner = owner_name;
+
+  const type = business_type || d.business.business_type || 'small business';
+  const framework = await getOrGenerateFramework(type);
+
+  if (!framework) {
+    return { business: business.name, message: "I'm still building your capability profile — check back in a moment." };
+  }
+
+  const layer2Scores = await getAssessmentScores(business_id);
+  const merged = mergeScores(d.capability_scores || {}, layer2Scores, framework);
+  const roadmap = prioritisedRoadmap(framework, merged);
+
+  const scoredCount = roadmap.filter(r => r.scored).length;
+  const unscoredCount = roadmap.filter(r => !r.scored).length;
+  const top3 = roadmap.slice(0, 3);
+
+  const context = {
+    owner: business.owner,
+    business: business.name,
+    business_type: type,
+    scored_capabilities: scoredCount,
+    unscored_capabilities: unscoredCount,
+    top_priorities: top3.map(r => ({
+      capability: r.name,
+      domain: r.domain,
+      current_level: r.current_score,
+      current_state: r.current_description,
+      target_level: r.target_score,
+      target_state: r.target_description,
+      source: r.source,
+      ai_use_case: r.ai_use_case,
+    })),
+    assessment_complete: unscoredCount === 0,
+  };
+
+  const insight = await claraAnalyze(
+    `Write a growth roadmap for ${business.owner} at ${business.name}. They run a ${type} business.
+
+Present the top 3 capability priorities. For each:
+- One bold label line: **[Capability Name] — Level [N]/5**
+- One line on what their current state looks like (use current_state if available)
+- One line on what Level [target] looks like and what changes
+- One line on the specific AI use case that closes this gap
+
+End with: if there are unscored capabilities (${unscoredCount} remaining), tell ${business.owner} that Vigil will ask about those over the next few days through normal conversation — not a survey.
+
+No bullet points within sections. Keep it tight — this is a roadmap, not a report.`,
+    context,
+    wiki_context
+  );
+
+  return {
+    business: business.name,
+    roadmap: insight,
+    raw: { top3, scored: scoredCount, unscored: unscoredCount },
+  };
 }
 
 // ── Tool: onboard_clara ───────────────────────────────────────────────────────
@@ -404,7 +541,7 @@ export async function onboardClara({ owner_name, business_type, biggest_concern,
   const insight = await claraAnalyze(
     `You are onboarding ${name}, who runs a ${type} business. Their biggest concern is: "${concern}". Annual revenue is approximately ${revenue}.
 
-Using the representative financial data below (from a similar business), deliver their FIRST Clara insight. This is the moment that either hooks them or loses them.
+Using the representative financial data below (from a similar business), deliver their FIRST Vigil insight. This is the moment that either hooks them or loses them.
 
 FORMAT — follow this structure exactly:
 
@@ -414,7 +551,7 @@ FORMAT — follow this structure exactly:
 
 3. Then a blank line, then one sentence: the single most important thing they should do TODAY. Start with "**Today:**" (bold, exactly like that)
 
-4. Then a blank line, then one warm sentence that teases what Clara will show them next. End with a specific question tied to the next button they'll tap — e.g. "Want to see your full cash forecast?"
+4. Then a blank line, then one warm sentence that teases what Vigil will show them next. End with a specific question tied to the next button they'll tap — e.g. "Want to see your full cash forecast?"
 
 STOP after step 4. Do NOT add any disclaimer about representative data, do not mention connecting accounting software, do not say you'll check in tomorrow. The bot appends those automatically.
 
@@ -437,6 +574,60 @@ Keep the total length short — this is a chat message, not a report. Warm, dire
       'identify_value_gaps — where you\'re leaving money on the table',
       'get_ar_alerts — overdue invoices ranked by urgency',
       'ask_clara — any financial question in plain English',
+      'get_vigil_score — 1–5 composite score across 8 capabilities with dollar gaps and top action',
     ],
+  };
+}
+
+// ── Tool: get_vigil_score ─────────────────────────────────────────────────────
+
+export async function getVigilScore({ business_id, owner_name }) {
+  const realmId = validateBusinessId(business_id);
+  const d       = await loadBusiness(realmId);
+  const answers = await loadAnswers(realmId);
+
+  const result = computeVigilScore(d, answers);
+
+  // Persist this score snapshot
+  await saveScore(realmId, result, d, answers).catch(() => {});
+
+  const { business } = d;
+  if (owner_name) business.owner = owner_name;
+
+  const capLines = Object.entries(result.scores)
+    .sort((a, b) => a[1].score - b[1].score)
+    .map(([, v]) => {
+      const stars = '★'.repeat(v.score) + '☆'.repeat(5 - v.score);
+      const gap   = v.dollar_gap > 0 ? ` — $${Math.round(v.dollar_gap / 1000)}K gap` : '';
+      return `${stars}  ${v.label}${gap}`;
+    })
+    .join('\n');
+
+  const action = result.top_action;
+  const actionText = action
+    ? `**Top action — ${action.capability}:** ${action.action}\n${action.instruction}`
+    : 'All capabilities at benchmark — no critical action right now.';
+
+  const bs = result.top_bright_spot;
+  const bsText = bs ? `**Bright spot:** ${bs.business} — ${bs.story}` : '';
+
+  return {
+    business:        business.name || realmId,
+    composite:       result.composite,
+    composite_label: `${result.composite} / 5.0`,
+    industry:        result.industry_code,
+    scores:          result.scores,
+    capabilities:    capLines,
+    top_action:      action,
+    top_bright_spot: result.top_bright_spot,
+    summary: [
+      `**Vigil Score: ${result.composite} / 5.0** — ${business.owner || 'Your business'} vs ${result.industry_code} peers`,
+      '',
+      capLines,
+      '',
+      actionText,
+      '',
+      bsText,
+    ].filter(Boolean).join('\n'),
   };
 }
