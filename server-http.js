@@ -308,6 +308,14 @@ const app = express();
 app.use(express.json());
 app.use(express.static(join(__dirname, 'public')));
 
+// HTTPS redirect — Cloudflare sets x-forwarded-proto on HTTP requests
+app.use((req, res, next) => {
+  if (req.headers['x-forwarded-proto'] === 'http') {
+    return res.redirect(301, `https://${req.headers.host}${req.url}`);
+  }
+  next();
+});
+
 // Security headers on all responses
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');

@@ -177,9 +177,9 @@ function navHtml(activeCta = true) {
   return `<nav>
     <a href="/" class="nav-logo">Vigil</a>
     ${activeCta ? `<div style="display:flex;gap:1.5rem;align-items:center">
-      <a href="/pricing" style="font-size:0.775rem;color:var(--text-muted);text-decoration:none">Pricing</a>
+      <a href="/pricing" class="nav-secondary" style="font-size:0.775rem;color:var(--text-muted);text-decoration:none">Pricing</a>
       <a href="/demo" class="nav-cta nav-secondary" style="color:var(--text-muted);border-color:var(--text-muted)">Try demo</a>
-      <a href="/connect" class="nav-cta">Connect your books →</a>
+      <a href="/connect" class="nav-cta" style="white-space:nowrap">Connect your books →</a>
     </div>` : ''}
   </nav>`;
 }
@@ -300,6 +300,8 @@ export function landingPage() {
   ${FONTS}
   <style>
     ${BASE_CSS}
+
+    html, body { overflow-x: hidden; }
 
     /* ── Landing page specific ── */
 
@@ -490,11 +492,15 @@ export function landingPage() {
 
     @media (max-width: 760px) {
       .hero-wrap { grid-template-columns: 1fr; }
-      .hero-img { order: -1; }
+      .hero-img { order: -1; min-height: 300px; }
+      .phone-wrapper { right: 50%; transform: translate(50%, -50%); }
     }
 
     @media (max-width: 480px) {
       .hero { padding-top: 2.5rem; padding-bottom: 2.5rem; }
+      .hero-img { min-height: 240px; }
+      .phone-wrapper { display: none; }
+      .hero-ctas .btn { flex: unset; width: 100%; }
     }
 
     /* Score section */
